@@ -17,7 +17,7 @@ Road map:
 - [ ] Create Final Presentation Papers
 
 Project Proposal Presentation: https://docs.google.com/presentation/d/1AvKtM8_XLmtjLOgMODPyOWTwEQmSGZi7rVEb-CqpXcs/edit?usp=sharing
-Project Proposal Writeup: https://www.overleaf.com/read/dzyzxmthpyws
+Project Proposal Writeup: https://drive.google.com/open?id=0B0Nk0HGLRR2MNmdVbURuY1pXckE
 
 Created by Saket Sadani and Victoria Zhou
 
