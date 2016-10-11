@@ -1,0 +1,6 @@
+TODO LIST
+- Write push forward with user input on velocity with a max threshold (.5)
+- Find default push forward position; make position defualt pose/ global 
+  position
+- Write push with different heights (start at a higher position)
+- Get heights/ point cloud of objects to make parmameters (height) relative
