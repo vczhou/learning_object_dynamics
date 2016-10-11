@@ -75,7 +75,8 @@ target_link_libraries(ex5 ${catkin_LIBRARIES} )
 add_executable(ex6 src/ex6.cpp)
 target_link_libraries(ex6 ${catkin_LIBRARIES} )
 
-
+add_executable(push_script src/push_script)
+target_link_libraries(push_script ${catkin_LIBRARIES} )
 
 ## example task 
 #add_executable(object_handover_delivery_task src/object_handover_delivery_task.cpp)
