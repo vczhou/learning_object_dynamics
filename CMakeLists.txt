@@ -57,23 +57,23 @@ include_directories(
 
 ## executables
 
-add_executable(ex1_subscribing_to_topics src/ex1_subscribing_to_topics.cpp)
-target_link_libraries(ex1_subscribing_to_topics ${catkin_LIBRARIES} )
+add_executable(ex1 src/ex1.cpp)
+target_link_libraries(ex1 ${catkin_LIBRARIES} )
 
-add_executable(ex2_gripper src/ex2_gripper.cpp)
-target_link_libraries(ex2_gripper ${catkin_LIBRARIES} )
+add_executable(ex2 src/ex2.cpp)
+target_link_libraries(ex2 ${catkin_LIBRARIES} )
 
-add_executable(ex3_home_arm src/ex3_home_arm.cpp)
-target_link_libraries(ex3_home_arm ${catkin_LIBRARIES} )
+add_executable(ex3 src/ex3.cpp)
+target_link_libraries(ex3 ${catkin_LIBRARIES} )
 
-add_executable(ex4_cartesian_vel_control src/ex4_cartesian_vel_control.cpp)
-target_link_libraries(ex4_cartesian_vel_control ${catkin_LIBRARIES} )
+add_executable(ex4 src/ex4.cpp)
+target_link_libraries(ex4 ${catkin_LIBRARIES} )
 
-add_executable(ex5_angular_vel_control src/ex5_angular_vel_control.cpp)
-target_link_libraries(ex5_angular_vel_control ${catkin_LIBRARIES} )
+add_executable(ex5 src/ex5.cpp)
+target_link_libraries(ex5 ${catkin_LIBRARIES} )
 
-add_executable(ex6_detect_force src/ex6_detect_force.cpp)
-target_link_libraries(ex6_detect_force ${catkin_LIBRARIES} )
+add_executable(ex6 src/ex6.cpp)
+target_link_libraries(ex6 ${catkin_LIBRARIES} )
 
 
 
