@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package>
-  <name>segbot_arm_tutorials</name>
+  <name>our_tutorials</name>
   <version>0.0.0</version>
   <description>This package provides a set of examples for controlling the robot arm.</description>
 
