@@ -1,5 +1,8 @@
 #include <ros/ros.h>
 #include <ros/package.h>
+#include <string>
+#include <sstream>
+#include <iostream>
 
 //used for registering Ctrl-C events
 #include <signal.h>
@@ -19,8 +22,6 @@
 //our own arm library 
 #include <segbot_arm_manipulation/arm_utils.h>
 
-
-
 #define NUM_JOINTS 8 //6+2 for the arm
 
 //global variables for storing sensory data
@@ -28,7 +29,6 @@ sensor_msgs::JointState current_state;
 geometry_msgs::PoseStamped current_pose;
 sensor_msgs::JointState current_efforts;
 jaco_msgs::FingerPosition current_finger;
-
 
 bool heardJoinstState;
 bool heardPose;
@@ -94,11 +94,10 @@ void listenForArmData(){
 	}
 }
 
-
 // Blocking call for user input
 void pressEnter(std::string message){
 	std::cout << message;
-	while (true){
+	while (true) {
 		char c = std::cin.get();
 		if (c == '\n')
 			break;
@@ -112,6 +111,62 @@ void pressEnter(std::string message){
 	}
 }
 
+// Blocking call for user input
+double getNumInput(std::string message){
+    std::string input = "";
+    double i = 0;
+	while (true){
+	    std::cout << message;
+        std::getLine(cin, input);
+
+        std::stringstream myStream(input);
+        if(myStream >> myNumber) 
+            break;
+        std::cout << "Invalid number, please try again" << endl;
+	}
+}
+
+void stopMotion(Ros::Publisher pub_velocity) {
+	geometry_msgs::TwistStamped velocityMsg;
+	velocityMsg.twist.linear.x = 0.0;
+	velocityMsg.twist.linear.y = 0.0;
+	velocityMsg.twist.linear.z = 0.0; 
+	velocityMsg.twist.angular.x = 0.0;
+	velocityMsg.twist.angular.y = 0.0;
+	velocityMsg.twist.angular.z = 0.0;
+
+	//publish 0 velocity command -- otherwise arm will continue moving with the last command for 0.25 seconds
+	pub_velocity.publish(velocityMsg);
+}
+
+void pushForward(double zVelocity, double duration, Ros::Publisher pub_velocity) {
+	geometry_msgs::TwistStamped velocityMsg;
+	velocityMsg.twist.linear.x = 0.0;
+	velocityMsg.twist.linear.y = 0.0;
+	velocityMsg.twist.linear.z = zVelocity; 
+	velocityMsg.twist.angular.x = 0.0;
+	velocityMsg.twist.angular.y = 0.0;
+	velocityMsg.twist.angular.z = 0.0;
+
+	double elapsed_time = 0.0;
+	double pub_rate = 40.0; //we publish at 40 hz
+	ros::Rate r(pub_rate);
+	
+	while (ros::ok()){
+		//collect messages
+		ros::spinOnce();
+		
+		//publish velocity message
+		pub_velocity.publish(velocityMsg);
+		
+		r.sleep();
+		
+		elapsed_time += (1.0/pub_rate);
+		
+		if (elapsed_time > duration)
+			break;
+	}
+}
 
 int main(int argc, char **argv) {
 	// Intialize ROS with this node name
@@ -148,62 +203,12 @@ int main(int argc, char **argv) {
 
 	//close fingers and "home" the arm
 	pressEnter("Press [Enter] to start");
-	
-	//construct message
-	geometry_msgs::TwistStamped velocityMsg;
-	velocityMsg.twist.linear.x = 0.0;
-	velocityMsg.twist.linear.y = 0.0;
-	velocityMsg.twist.linear.z = 0.2; 
-	velocityMsg.twist.angular.x = 0.0;
-	velocityMsg.twist.angular.y = 0.0;
-	velocityMsg.twist.angular.z = 0.0;
 
-	double duration = 1.0; //2 seconds
-	double elapsed_time = 0.0;
+    //Get input for velocity
+    double zVelocity = getNumInput("Enter velocity (double) for push");
 	
-	double pub_rate = 40.0; //we publish at 40 hz
-	ros::Rate r(pub_rate);
-	
-	while (ros::ok()){
-		//collect messages
-		ros::spinOnce();
-		
-		//publish velocity message
-		pub_velocity.publish(velocityMsg);
-		
-		r.sleep();
-		
-		elapsed_time += (1.0/pub_rate);
-		
-		if (elapsed_time > duration)
-			break;
-	}
-	
-	
-	velocityMsg.twist.linear.z = -0.2;
-	
-	elapsed_time = 0.0;
-	while (ros::ok()){
-		//collect messages
-		ros::spinOnce();
-		
-		//publish velocity message
-		pub_velocity.publish(velocityMsg);
-		
-		r.sleep();
-		
-		elapsed_time += (1.0/pub_rate);
-		
-		if (elapsed_time > duration)
-			break;
-	}
-	
-	
-	//publish 0 velocity command -- otherwise arm will continue moving with the last command for 0.25 seconds
-	velocityMsg.twist.linear.z = 0.0; 
-	pub_velocity.publish(velocityMsg);
-
-	
+    pushForward(zVelocity, 1.0, pub_velocity);
+    stopMotion(pub_velocity);
 
 	//the end
 	ros::shutdown();
