@@ -18,7 +18,7 @@
 //JACO messages and actions
 #include <jaco_msgs/FingerPosition.h>
 #include <jaco_msgs/HomeArm.h>
-p
+
 //our own arm library 
 #include <segbot_arm_manipulation/arm_utils.h>
 
@@ -113,20 +113,22 @@ void pressEnter(std::string message){
 
 // Blocking call for user input
 double getNumInput(std::string message){
+	std::cout << message;
     std::string input = "";
-    double i = 0;
+    double myNumber = 0;
 	while (true){
-	    std::cout << message;
-        std::getLine(cin, input);
+	   std::getline(std::cin, input);
 
-        std::stringstream myStream(input);
-        if(myStream >> myNumber) 
-            break;
-        std::cout << "Invalid number, please try again" << endl;
+	   std::stringstream myStream(input);
+	   if(myStream >> myNumber){
+	   		return myNumber;
+	   		break;
+	   }
+	   std::cout << "Invalid number, please try again" << std::endl;
 	}
 }
 
-void stopMotion(Ros::Publisher pub_velocity) {
+void stopMotion(ros::Publisher pub_velocity) {
 	geometry_msgs::TwistStamped velocityMsg;
 	velocityMsg.twist.linear.x = 0.0;
 	velocityMsg.twist.linear.y = 0.0;
@@ -139,7 +141,7 @@ void stopMotion(Ros::Publisher pub_velocity) {
 	pub_velocity.publish(velocityMsg);
 }
 
-void pushForward(double zVelocity, double duration, Ros::Publisher pub_velocity) {
+void pushForward(double zVelocity, double duration, ros::Publisher pub_velocity) {
 	geometry_msgs::TwistStamped velocityMsg;
 	velocityMsg.twist.linear.x = 0.0;
 	velocityMsg.twist.linear.y = 0.0;
