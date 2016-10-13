@@ -1,7 +1,6 @@
 cmake_minimum_required(VERSION 2.8.3)
-project(our_tutorials)
+project(learning_object_dynamics)
 
-#source ~/catkin_ws/devel/setup.bash
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
@@ -75,8 +74,10 @@ target_link_libraries(ex5 ${catkin_LIBRARIES} )
 add_executable(ex6 src/ex6.cpp)
 target_link_libraries(ex6 ${catkin_LIBRARIES} )
 
-add_executable(push_script src/push_script)
+add_executable(push_script src/push_script.cpp)
 target_link_libraries(push_script ${catkin_LIBRARIES} )
+
+
 
 ## example task 
 #add_executable(object_handover_delivery_task src/object_handover_delivery_task.cpp)

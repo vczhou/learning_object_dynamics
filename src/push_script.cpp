@@ -141,11 +141,11 @@ void stopMotion(ros::Publisher pub_velocity) {
 	pub_velocity.publish(velocityMsg);
 }
 
-void pushForward(double zVelocity, double duration, ros::Publisher pub_velocity) {
+void pushForward(double xVelocity, double duration, ros::Publisher pub_velocity) {
 	geometry_msgs::TwistStamped velocityMsg;
-	velocityMsg.twist.linear.x = 0.0;
+	velocityMsg.twist.linear.x = xVelocity;
 	velocityMsg.twist.linear.y = 0.0;
-	velocityMsg.twist.linear.z = zVelocity; 
+	velocityMsg.twist.linear.z = 0.0; 
 	velocityMsg.twist.angular.x = 0.0;
 	velocityMsg.twist.angular.y = 0.0;
 	velocityMsg.twist.angular.z = 0.0;
@@ -207,9 +207,9 @@ int main(int argc, char **argv) {
 	pressEnter("Press [Enter] to start");
 
     //Get input for velocity
-    double zVelocity = getNumInput("Enter velocity (double) for push");
+    double xVelocity = getNumInput("Enter velocity (double) for push\n");
 	
-    pushForward(zVelocity, 1.0, pub_velocity);
+    pushForward(xVelocity, 1.0, pub_velocity);
     stopMotion(pub_velocity);
 
 	//the end
