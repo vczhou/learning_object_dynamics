@@ -21,6 +21,7 @@
 
 //our own arm library 
 #include <segbot_arm_manipulation/arm_utils.h>
+#include <segbot_arm_manipulation/arm_positions_db.h>
 
 #define NUM_JOINTS 8 //6+2 for the arm
 
@@ -170,6 +171,23 @@ void pushForward(double xVelocity, double duration, ros::Publisher pub_velocity)
 	}
 }
 
+void moveToStartPos(ros::NodeHandle nh_) {
+	std::string j_pos_filename = ros::package::getPath("learning_object_dynamics")+"/data/jointspace_position_db.txt";
+	std::string c_pos_filename = ros::package::getPath("learning_object_dynamics")+"/data/toolspace_position_db.txt";
+	
+	ArmPositionDB *posDB = new ArmPositionDB(j_pos_filename, c_pos_filename);
+
+	if (posDB->hasCarteseanPosition("push")) {
+		ROS_INFO("Moving to push starting position...");
+		geometry_msgs::PoseStamped out_of_view_pose = posDB->getToolPositionStamped("push","/mico_link_base");
+				
+		//now go to the pose
+		segbot_arm_manipulation::moveToPoseMoveIt(nh_,out_of_view_pose);
+	} else {
+		ROS_ERROR("[push_script.cpp] Cannot move arm out to starting position!");
+	}
+}
+
 int main(int argc, char **argv) {
 	// Intialize ROS with this node name
 	ros::init(argc, argv, "ex1_subscribing_to_topics");
@@ -206,11 +224,12 @@ int main(int argc, char **argv) {
 	//close fingers and "home" the arm
 	pressEnter("Press [Enter] to start");
 
-    //Get input for velocity
-    double xVelocity = getNumInput("Enter velocity (double) for push\n");
+    	//Get input for velocity
+    	double xVelocity = getNumInput("Enter velocity (double) for push\n");
 	
-    pushForward(xVelocity, 1.0, pub_velocity);
-    stopMotion(pub_velocity);
+	moveToStartPos(n);
+    	pushForward(xVelocity, 1.0, pub_velocity);
+    	stopMotion(pub_velocity);
 
 	//the end
 	ros::shutdown();
