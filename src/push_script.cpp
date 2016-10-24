@@ -31,6 +31,10 @@ geometry_msgs::PoseStamped current_pose;
 sensor_msgs::JointState current_efforts;
 jaco_msgs::FingerPosition current_finger;
 
+//publishers
+ros::Publisher pub_velocity;
+ros::Publisher pose_pub;
+
 bool heardJoinstState;
 bool heardPose;
 bool heardEfforts;
@@ -179,10 +183,15 @@ void moveToStartPos(ros::NodeHandle nh_) {
 
 	if (posDB->hasCarteseanPosition("push")) {
 		ROS_INFO("Moving to push starting position...");
-		geometry_msgs::PoseStamped out_of_view_pose = posDB->getToolPositionStamped("push","/mico_link_base");
-				
+		geometry_msgs::PoseStamped starting_pose = posDB->getToolPositionStamped("push","/mico_link_base");
+			
+        //Publish pose to visualize in rviz 	
+		pose_pub.publish(starting_pose);
 		//now go to the pose
-		segbot_arm_manipulation::moveToPoseMoveIt(nh_,out_of_view_pose);
+		segbot_arm_manipulation::moveToPoseMoveIt(nh_, starting_pose);
+
+        //Check to make sure actually went there in rviz
+		pose_pub.publish(starting_pose);
 	} else {
 		ROS_ERROR("[push_script.cpp] Cannot move arm out to starting position!");
 	}
@@ -213,7 +222,8 @@ int main(int argc, char **argv) {
 	 */  
 	 
 	//publish cartesian tool velocities
-	ros::Publisher pub_velocity = n.advertise<geometry_msgs::TwistStamped>("/mico_arm_driver/in/cartesian_velocity", 10);
+	pub_velocity = n.advertise<geometry_msgs::TwistStamped>("/mico_arm_driver/in/cartesian_velocity", 10);
+    pose_pub = n.advertise<geometry_msgs::PoseStamped>("/learning_object_dynamics/pose_out", 10);
 	
 	//register ctrl-c
 	signal(SIGINT, sig_handler);
@@ -235,10 +245,14 @@ int main(int argc, char **argv) {
 
 	if (posDB->hasCarteseanPosition("push")) {
 		ROS_INFO("Moving to push starting position...");
-		geometry_msgs::PoseStamped out_of_view_pose = posDB->getToolPositionStamped("push","/mico_link_base");
+		geometry_msgs::PoseStamped starting_pose = posDB->getToolPositionStamped("push","/mico_link_base");
 				
-		//now go to the pose
-		segbot_arm_manipulation::moveToPoseMoveIt(n,out_of_view_pose);
+        //Publish pose to visualize in rviz 	
+		pose_pub.publish(starting_pose);
+        //now go to the pose
+		segbot_arm_manipulation::moveToPoseMoveIt(n, starting_pose);
+        //Check to make sure actually went there in rviz
+		pose_pub.publish(starting_pose);
 	} else {
 		ROS_ERROR("[push_script.cpp] Cannot move arm out to starting position!");
 	}
