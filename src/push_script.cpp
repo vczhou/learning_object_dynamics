@@ -251,14 +251,19 @@ int main(int argc, char **argv) {
 		pose_pub.publish(starting_pose);
         //now go to the pose
 		segbot_arm_manipulation::moveToPoseMoveIt(n, starting_pose);
+		segbot_arm_manipulation::moveToPoseMoveIt(n, starting_pose);
         //Check to make sure actually went there in rviz
 		pose_pub.publish(starting_pose);
 	} else {
 		ROS_ERROR("[push_script.cpp] Cannot move arm out to starting position!");
 	}
 
+	ros::spinOnce();
 	pushForward(xVelocity, 1.0, pub_velocity);
 	stopMotion(pub_velocity);
+
+	while(ros::ok()) {
+	}
 
 	//the end
 	ros::shutdown();
