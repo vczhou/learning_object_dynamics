@@ -257,8 +257,11 @@ int main(int argc, char **argv) {
 	} else {
 		ROS_ERROR("[push_script.cpp] Cannot move arm out to starting position!");
 	}
-
+	
+	ros::Rate r(40);
 	ros::spinOnce();
+	
+	r.sleep();
 	pushForward(xVelocity, 1.0, pub_velocity);
 	stopMotion(pub_velocity);
 

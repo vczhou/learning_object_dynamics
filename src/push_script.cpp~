@@ -1,5 +1,8 @@
 #include <ros/ros.h>
 #include <ros/package.h>
+#include <string>
+#include <sstream>
+#include <iostream>
 
 //used for registering Ctrl-C events
 #include <signal.h>
@@ -18,8 +21,7 @@
 
 //our own arm library 
 #include <segbot_arm_manipulation/arm_utils.h>
-
-
+#include <segbot_arm_manipulation/arm_positions_db.h>
 
 #define NUM_JOINTS 8 //6+2 for the arm
 
@@ -29,6 +31,9 @@ geometry_msgs::PoseStamped current_pose;
 sensor_msgs::JointState current_efforts;
 jaco_msgs::FingerPosition current_finger;
 
+//publishers
+ros::Publisher pub_velocity;
+ros::Publisher pose_pub;
 
 bool heardJoinstState;
 bool heardPose;
@@ -94,11 +99,10 @@ void listenForArmData(){
 	}
 }
 
-
 // Blocking call for user input
 void pressEnter(std::string message){
 	std::cout << message;
-	while (true){
+	while (true) {
 		char c = std::cin.get();
 		if (c == '\n')
 			break;
@@ -112,6 +116,86 @@ void pressEnter(std::string message){
 	}
 }
 
+// Blocking call for user input
+double getNumInput(std::string message){
+	std::cout << message;
+    std::string input = "";
+    double myNumber = 0;
+	while (true){
+	   std::getline(std::cin, input);
+
+	   std::stringstream myStream(input);
+	   if(myStream >> myNumber){
+	   		return myNumber;
+	   		break;
+	   }
+	   std::cout << "Invalid number, please try again" << std::endl;
+	}
+}
+
+void stopMotion(ros::Publisher pub_velocity) {
+	geometry_msgs::TwistStamped velocityMsg;
+	velocityMsg.twist.linear.x = 0.0;
+	velocityMsg.twist.linear.y = 0.0;
+	velocityMsg.twist.linear.z = 0.0; 
+	velocityMsg.twist.angular.x = 0.0;
+	velocityMsg.twist.angular.y = 0.0;
+	velocityMsg.twist.angular.z = 0.0;
+
+	//publish 0 velocity command -- otherwise arm will continue moving with the last command for 0.25 seconds
+	pub_velocity.publish(velocityMsg);
+}
+
+void pushForward(double xVelocity, double duration, ros::Publisher pub_velocity) {
+	geometry_msgs::TwistStamped velocityMsg;
+	velocityMsg.twist.linear.x = xVelocity;
+	velocityMsg.twist.linear.y = 0.0;
+	velocityMsg.twist.linear.z = 0.0; 
+	velocityMsg.twist.angular.x = 0.0;
+	velocityMsg.twist.angular.y = 0.0;
+	velocityMsg.twist.angular.z = 0.0;
+
+	double elapsed_time = 0.0;
+	double pub_rate = 40.0; //we publish at 40 hz
+	ros::Rate r(pub_rate);
+	
+	while (ros::ok()){
+		//collect messages
+		ros::spinOnce();
+		
+		//publish velocity message
+		pub_velocity.publish(velocityMsg);
+		
+		r.sleep();
+		
+		elapsed_time += (1.0/pub_rate);
+		
+		if (elapsed_time > duration)
+			break;
+	}
+}
+
+void moveToStartPos(ros::NodeHandle nh_) {
+	std::string j_pos_filename = ros::package::getPath("learning_object_dynamics")+"/data/jointspace_position_db.txt";
+	std::string c_pos_filename = ros::package::getPath("learning_object_dynamics")+"/data/toolspace_position_db.txt";
+	
+	ArmPositionDB *posDB = new ArmPositionDB(j_pos_filename, c_pos_filename);
+
+	if (posDB->hasCarteseanPosition("push")) {
+		ROS_INFO("Moving to push starting position...");
+		geometry_msgs::PoseStamped starting_pose = posDB->getToolPositionStamped("push","/mico_link_base");
+			
+        //Publish pose to visualize in rviz 	
+		pose_pub.publish(starting_pose);
+		//now go to the pose
+		segbot_arm_manipulation::moveToPoseMoveIt(nh_, starting_pose);
+
+        //Check to make sure actually went there in rviz
+		pose_pub.publish(starting_pose);
+	} else {
+		ROS_ERROR("[push_script.cpp] Cannot move arm out to starting position!");
+	}
+}
 
 int main(int argc, char **argv) {
 	// Intialize ROS with this node name
@@ -138,7 +222,8 @@ int main(int argc, char **argv) {
 	 */  
 	 
 	//publish cartesian tool velocities
-	ros::Publisher pub_velocity = n.advertise<geometry_msgs::TwistStamped>("/mico_arm_driver/in/cartesian_velocity", 10);
+	pub_velocity = n.advertise<geometry_msgs::TwistStamped>("/mico_arm_driver/in/cartesian_velocity", 10);
+    pose_pub = n.advertise<geometry_msgs::PoseStamped>("/learning_object_dynamics/pose_out", 10);
 	
 	//register ctrl-c
 	signal(SIGINT, sig_handler);
@@ -148,62 +233,40 @@ int main(int argc, char **argv) {
 
 	//close fingers and "home" the arm
 	pressEnter("Press [Enter] to start");
-	
-	//construct message
-	geometry_msgs::TwistStamped velocityMsg;
-	velocityMsg.twist.linear.x = 0.0;
-	velocityMsg.twist.linear.y = 0.0;
-	velocityMsg.twist.linear.z = 0.2; 
-	velocityMsg.twist.angular.x = 0.0;
-	velocityMsg.twist.angular.y = 0.0;
-	velocityMsg.twist.angular.z = 0.0;
 
-	double duration = 1.0; //2 seconds
-	double elapsed_time = 0.0;
+    	//Get input for velocity
+    	double xVelocity = getNumInput("Enter velocity (double) for push\n");
 	
-	double pub_rate = 40.0; //we publish at 40 hz
-	ros::Rate r(pub_rate);
+	//moveToStartPos(n);
+	std::string j_pos_filename = ros::package::getPath("learning_object_dynamics")+"/data/jointspace_position_db.txt";
+	std::string c_pos_filename = ros::package::getPath("learning_object_dynamics")+"/data/toolspace_position_db.txt";
 	
-	while (ros::ok()){
-		//collect messages
-		ros::spinOnce();
-		
-		//publish velocity message
-		pub_velocity.publish(velocityMsg);
-		
-		r.sleep();
-		
-		elapsed_time += (1.0/pub_rate);
-		
-		if (elapsed_time > duration)
-			break;
+	ArmPositionDB *posDB = new ArmPositionDB(j_pos_filename, c_pos_filename);
+
+	if (posDB->hasCarteseanPosition("push")) {
+		ROS_INFO("Moving to push starting position...");
+		geometry_msgs::PoseStamped starting_pose = posDB->getToolPositionStamped("push","/mico_link_base");
+				
+        //Publish pose to visualize in rviz 	
+		pose_pub.publish(starting_pose);
+        //now go to the pose
+		segbot_arm_manipulation::moveToPoseMoveIt(n, starting_pose);
+		segbot_arm_manipulation::moveToPoseMoveIt(n, starting_pose);
+        //Check to make sure actually went there in rviz
+		pose_pub.publish(starting_pose);
+	} else {
+		ROS_ERROR("[push_script.cpp] Cannot move arm out to starting position!");
 	}
 	
+	ros::Rate r(40);
+	ros::spinOnce();
 	
-	velocityMsg.twist.linear.z = -0.2;
-	
-	elapsed_time = 0.0;
-	while (ros::ok()){
-		//collect messages
-		ros::spinOnce();
-		
-		//publish velocity message
-		pub_velocity.publish(velocityMsg);
-		
-		r.sleep();
-		
-		elapsed_time += (1.0/pub_rate);
-		
-		if (elapsed_time > duration)
-			break;
-	}
-	
-	
-	//publish 0 velocity command -- otherwise arm will continue moving with the last command for 0.25 seconds
-	velocityMsg.twist.linear.z = 0.0; 
-	pub_velocity.publish(velocityMsg);
+	r.sleep();
+	pushForward(xVelocity, 1.0, pub_velocity);
+	stopMotion(pub_velocity);
 
-	
+	while(ros::ok()) {
+	}
 
 	//the end
 	ros::shutdown();
