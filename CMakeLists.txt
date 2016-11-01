@@ -77,8 +77,8 @@ target_link_libraries(ex6 ${catkin_LIBRARIES} )
 add_executable(push_script src/push_script.cpp)
 target_link_libraries(push_script ${catkin_LIBRARIES} )
 
-add_executable(data_collector src/data_collector.cpp)
-target_link_libraries(data_collector ${catkin_LIBRARIES} )
+#add_executable(data_collector src/data_collector.cpp)
+#target_link_libraries(data_collector ${catkin_LIBRARIES} )
 
 
 

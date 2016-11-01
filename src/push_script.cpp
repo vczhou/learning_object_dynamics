@@ -23,9 +23,26 @@
 #include <tf/transform_listener.h>
 #include <tf/tf.h>
 
+#include <pcl_ros/impl/transforms.hpp>
+
+// PCL specific includes
+#include <pcl/conversions.h>
+#include <pcl_conversions/pcl_conversions.h>
+#include <pcl/point_cloud.h>
+#include <pcl/console/parse.h>
+#include <pcl/point_types.h>
+#include <pcl/io/openni_grabber.h>
+#include <pcl/sample_consensus/sac_model_plane.h>
+#include <pcl/common/time.h>
+#include <pcl/common/common.h>
+
 //our own arm library 
 #include <segbot_arm_manipulation/arm_utils.h>
 #include <segbot_arm_manipulation/arm_positions_db.h>
+
+/* define what kind of point clouds we're using */
+typedef pcl::PointXYZRGB PointT;
+typedef pcl::PointCloud<PointT> PointCloudT;
 
 #define NUM_JOINTS 8 //6+2 for the arm
 
@@ -46,11 +63,16 @@ bool heardJoinstState;
 bool heardPose;
 bool heardEfforts;
 bool heardFingers;
+
 bool collecting_cloud = false;
 bool new_cloud_available_flag = false;
 
 PointCloudT::Ptr cloud (new PointCloudT);
 PointCloudT::Ptr cloud_aggregated (new PointCloudT);
+PointCloudT::Ptr cloud_plane (new PointCloudT);
+PointCloudT::Ptr cloud_plane_baselink (new PointCloudT);
+
+
 
 //true if Ctrl-C is pressed
 bool g_caught_sigint=false;
@@ -204,9 +226,9 @@ void getHeight() {
                 
     //convert to PCL format and take centroid
     pcl::fromROSMsg (plane_cloud_ros, *cloud_plane_baselink);
-    pcl::compute3DCentroid (*cloud_plane_baselink, plane_centroid);
+    //pcl::compute3DCentroid (*cloud_plane_baselink, plane_centroid);
     
-    ROS_INFO("[table_object_detection_node.cpp] Plane xyz: %f, %f, %f",plane_centroid(0),plane_centroid(1),plane_centroid(2));
+    //ROS_INFO("[table_object_detection_node.cpp] Plane xyz: %f, %f, %f",plane_centroid(0),plane_centroid(1),plane_centroid(2));
 }
 
 void stopMotion(ros::Publisher pub_velocity) {
@@ -293,6 +315,8 @@ int main(int argc, char **argv) {
 	//finger positions
 	ros::Subscriber sub_finger = n.subscribe("/mico_arm_driver/out/finger_position", 1, fingers_cb);
 	 
+
+	ros::Subscriber sub_cloud = n.subscribe("/xtion_camera/depth_registered/points", 1, cloud_cb);
 	/*
 	 * Publishers
 	 */  
