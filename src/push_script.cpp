@@ -210,7 +210,7 @@ void waitForCloudK(int k){
     collecting_cloud = false;
 }
 
-void getHeight() {
+float getHeight() {
     tf::TransformListener tf_listener;
 
     //wait for transform and perform it
@@ -227,7 +227,13 @@ void getHeight() {
     //convert to PCL format and take centroid
     pcl::fromROSMsg (plane_cloud_ros, *cloud_plane_baselink);
     //pcl::compute3DCentroid (*cloud_plane_baselink, plane_centroid);
-    
+
+    PointT min_pt, max_pt;
+    pcl::getMinMax3D(*cloud_plane_baselink, min_pt, max_pt);
+    float z_min = min_pt.z;
+    float z_max;
+
+    return z_max - z_min;
     //ROS_INFO("[table_object_detection_node.cpp] Plane xyz: %f, %f, %f",plane_centroid(0),plane_centroid(1),plane_centroid(2));
 }
 
@@ -317,6 +323,7 @@ int main(int argc, char **argv) {
 	 
 
 	ros::Subscriber sub_cloud = n.subscribe("/xtion_camera/depth_registered/points", 1, cloud_cb);
+	
 	/*
 	 * Publishers
 	 */  
