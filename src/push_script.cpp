@@ -19,6 +19,10 @@
 #include <jaco_msgs/FingerPosition.h>
 #include <jaco_msgs/HomeArm.h>
 
+//Transformer messages
+#include <tf/transform_listener.h>
+#include <tf/tf.h>
+
 //our own arm library 
 #include <segbot_arm_manipulation/arm_utils.h>
 #include <segbot_arm_manipulation/arm_positions_db.h>
@@ -35,10 +39,18 @@ jaco_msgs::FingerPosition current_finger;
 ros::Publisher pub_velocity;
 ros::Publisher pose_pub;
 
+// Mutex: //
+boost::mutex cloud_mutex;
+
 bool heardJoinstState;
 bool heardPose;
 bool heardEfforts;
 bool heardFingers;
+bool collecting_cloud = false;
+bool new_cloud_available_flag = false;
+
+PointCloudT::Ptr cloud (new PointCloudT);
+PointCloudT::Ptr cloud_aggregated (new PointCloudT);
 
 //true if Ctrl-C is pressed
 bool g_caught_sigint=false;
@@ -50,6 +62,19 @@ void sig_handler(int sig) {
 	ros::shutdown();
 	exit(1);
 };
+
+void cloud_cb (const sensor_msgs::PointCloud2ConstPtr& input)
+{
+        cloud_mutex.lock ();
+
+        //convert to PCL format
+        pcl::fromROSMsg (*input, *cloud);
+
+        //state that a new cloud is available
+        new_cloud_available_flag = true;
+
+        cloud_mutex.unlock ();
+}
 
 //Joint positions cb
 void joint_state_cb (const sensor_msgs::JointStateConstPtr& msg) {
@@ -131,6 +156,57 @@ double getNumInput(std::string message){
 	   }
 	   std::cout << "Invalid number, please try again" << std::endl;
 	}
+}
+
+/* collects a cloud by aggregating k successive frames */
+void waitForCloudK(int k){
+    ros::Rate r(30);
+    
+    cloud_aggregated->clear();
+    
+    int counter = 0;
+    collecting_cloud = true;
+    while (ros::ok()){
+        ros::spinOnce();
+        
+        r.sleep();
+        
+        if (new_cloud_available_flag){
+            
+            *cloud_aggregated+=*cloud;
+            
+            new_cloud_available_flag = false;
+            
+            counter ++;
+            
+            if (counter >= k){
+                cloud_aggregated->header = cloud->header;
+                break;
+            }
+        }
+    }
+    collecting_cloud = false;
+}
+
+void getHeight() {
+    tf::TransformListener tf_listener;
+
+    //wait for transform and perform it
+    tf_listener.waitForTransform(cloud->header.frame_id,"\base_link",ros::Time(0), ros::Duration(3.0));
+
+    //convert plane cloud to ROS
+    sensor_msgs::PointCloud2 plane_cloud_ros;
+    pcl::toROSMsg(*cloud_plane,plane_cloud_ros);
+    plane_cloud_ros.header.frame_id = cloud->header.frame_id;
+        
+    //transform it to base link frame of reference
+    pcl_ros::transformPointCloud ("\base_link", plane_cloud_ros, plane_cloud_ros, tf_listener);
+                
+    //convert to PCL format and take centroid
+    pcl::fromROSMsg (plane_cloud_ros, *cloud_plane_baselink);
+    pcl::compute3DCentroid (*cloud_plane_baselink, plane_centroid);
+    
+    ROS_INFO("[table_object_detection_node.cpp] Plane xyz: %f, %f, %f",plane_centroid(0),plane_centroid(1),plane_centroid(2));
 }
 
 void stopMotion(ros::Publisher pub_velocity) {
