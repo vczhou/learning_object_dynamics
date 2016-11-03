@@ -40,6 +40,10 @@
 #include <segbot_arm_manipulation/arm_utils.h>
 #include <segbot_arm_manipulation/arm_positions_db.h>
 
+//Jaco import
+#include "jaco_msgs/ArmPoseAction.h"
+
+
 /* define what kind of point clouds we're using */
 typedef pcl::PointXYZRGB PointT;
 typedef pcl::PointCloud<PointT> PointCloudT;

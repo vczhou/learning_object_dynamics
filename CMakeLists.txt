@@ -77,14 +77,14 @@ target_link_libraries(ex6 ${catkin_LIBRARIES} )
 add_executable(push_script src/push_script.cpp)
 target_link_libraries(push_script ${catkin_LIBRARIES} )
 
-add_executable(log_perception_action src/log_perception_action.cpp)
-target_link_libraries(log_perception_action ${catkin_LIBRARIES} )
+#add_executable(log_perception_action src/log_perception_action.cpp)
+#target_link_libraries(log_perception_action ${catkin_LIBRARIES} )
 
-add_executable(look_behavior src/look_behavior.cpp)
-target_link_libraries(look_behavior ${catkin_LIBRARIES} )
+#add_executable(look_behavior src/look_behavior.cpp)
+#target_link_libraries(look_behavior ${catkin_LIBRARIES} )
 
-add_executable(vision_logging_server src/vision_logging_server.cpp)
-target_link_libraries(vision_logging_server ${catkin_LIBRARIES} )
+#add_executable(vision_logging_server src/vision_logging_server.cpp)
+#target_link_libraries(vision_logging_server ${catkin_LIBRARIES} )
 
 
 
