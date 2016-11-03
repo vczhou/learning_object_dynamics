@@ -301,6 +301,44 @@ void moveToStartPos(ros::NodeHandle nh_) {
 	}
 }
 
+bool goToLocation(geometry_msgs::PoseStamped ps){
+    actionlib::SimpleActionClient<jaco_msgs::ArmPoseAction> ac("/mico_arm_driver/arm_pose/arm_pose", true);
+    jaco_msgs::ArmPoseGoal goalPose;
+    goalPose.pose.header.frame_id = ps.header.frame_id;
+    goalPose.pose.pose = ps.pose;
+    goalPose.pose.pose.orientation.y *= -1;
+    ac.waitForServer();
+    ROS_DEBUG("Waiting for server.");
+    ROS_INFO("Sending goal.");
+    ac.sendGoal(goalPose);
+    ac.waitForResult();
+}
+
+bool goToLocation(sensor_msgs::JointState js){
+    moveit_utils::AngularVelCtrl srv;
+    srv.request.state = js;
+    /*if(angular_client.call(srv))
+        ROS_INFO("Sending angular commands");
+    else
+        ROS_INFO("Cannot contact angular velocity service. Is it running?");
+    clearMsgs(.5);
+    return srv.response.success;*/
+    actionlib::SimpleActionClient<jaco_msgs::ArmJointAnglesAction> ac("/mico_arm_driver/joint_angles/arm_joint_angles", true);
+    jaco_msgs::ArmJointAnglesGoal goal;
+    goal.angles.joint1 = js.position[0];
+    goal.angles.joint2 = js.position[1];
+    goal.angles.joint3 = js.position[2];
+    goal.angles.joint4 = js.position[3];
+    goal.angles.joint5 = js.position[4];
+    goal.angles.joint6 = js.position[5];
+    //ROS_INFO("Joint6: %f", fromFile.position[5]);
+    ac.waitForServer();
+    ac.sendGoal(goal);
+    ROS_INFO("Trajectory goal sent");
+    ac.waitForResult();
+    
+}
+
 int main(int argc, char **argv) {
 	// Intialize ROS with this node name
 	ros::init(argc, argv, "ex1_subscribing_to_topics");
@@ -341,8 +379,8 @@ int main(int argc, char **argv) {
 	//close fingers and "home" the arm
 	pressEnter("Press [Enter] to start");
 
-    	//Get input for velocity
-    	double xVelocity = getNumInput("Enter velocity (double) for push\n");
+    //Get input for velocity
+    double xVelocity = getNumInput("Enter velocity (double) for push\n");
 	
 	//moveToStartPos(n);
 	std::string j_pos_filename = ros::package::getPath("learning_object_dynamics")+"/data/jointspace_position_db.txt";
@@ -354,13 +392,14 @@ int main(int argc, char **argv) {
 		ROS_INFO("Moving to push starting position...");
 		geometry_msgs::PoseStamped starting_pose = posDB->getToolPositionStamped("push","/mico_link_base");
 				
-        //Publish pose to visualize in rviz 	
+        goToLocation(starting_pose);
+        /*//Publish pose to visualize in rviz 	
 		pose_pub.publish(starting_pose);
         //now go to the pose
 		segbot_arm_manipulation::moveToPoseMoveIt(n, starting_pose);
 		segbot_arm_manipulation::moveToPoseMoveIt(n, starting_pose);
         //Check to make sure actually went there in rviz
-		pose_pub.publish(starting_pose);
+		pose_pub.publish(starting_pose);*/
 	} else {
 		ROS_ERROR("[push_script.cpp] Cannot move arm out to starting position!");
 	}
