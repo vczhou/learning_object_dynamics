@@ -306,6 +306,7 @@ void moveToStartPos(ros::NodeHandle nh_) {
 }
 
 bool goToLocation(geometry_msgs::PoseStamped ps){
+	ROS_INFO_STREAM(ps);
     actionlib::SimpleActionClient<jaco_msgs::ArmPoseAction> ac("/mico_arm_driver/arm_pose/arm_pose", true);
     jaco_msgs::ArmPoseGoal goalPose;
     goalPose.pose.header.frame_id = ps.header.frame_id;
@@ -316,6 +317,8 @@ bool goToLocation(geometry_msgs::PoseStamped ps){
     ROS_INFO("Sending goal.");
     ac.sendGoal(goalPose);
     ac.waitForResult();
+    ROS_INFO("Finished waiting for result \n");
+    ac.cancelAllGoals();
 }
 
 bool goToLocation(sensor_msgs::JointState js){
