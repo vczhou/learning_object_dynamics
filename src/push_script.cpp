@@ -393,13 +393,29 @@ int main(int argc, char **argv) {
 	std::string j_pos_filename = ros::package::getPath("learning_object_dynamics")+"/data/jointspace_position_db.txt";
 	std::string c_pos_filename = ros::package::getPath("learning_object_dynamics")+"/data/toolspace_position_db.txt";
 	
+	sensor_msgs:JointState joint_state_starting;
+	listenForArmData();
+	joint_state_starting = current_state;
+
 	ArmPositionDB *posDB = new ArmPositionDB(j_pos_filename, c_pos_filename);
+
+	std::vector<float> joint_pos;
+	if(posDB->hasJointPosition("push")) {
+		ROS_INFO("Moving push with joint");
+
+		joint_pos = posDb->getJointPosition("push");
+	} else {
+		ROS_ERROR("Couldn't find joint state\n");
+	}
+
+	joint_state_starting.position = joint_pos;
+	segbot_arm_manipulation::moveToJointState(n, joint_state_starting);
 
 	if (posDB->hasCarteseanPosition("push")) {
 		ROS_INFO("Moving to push starting position...");
 		// TODO change to /jaco_api_origin or /mico_api_origin
 		geometry_msgs::PoseStamped starting_pose = posDB->getToolPositionStamped("push","/mico_link_base");
-				
+
         goToLocation(starting_pose);
         /*//Publish pose to visualize in rviz 	
 		pose_pub.publish(starting_pose);
