@@ -397,6 +397,7 @@ int main(int argc, char **argv) {
 
 	if (posDB->hasCarteseanPosition("push")) {
 		ROS_INFO("Moving to push starting position...");
+		// TODO change to /jaco_api_origin or /mico_api_origin
 		geometry_msgs::PoseStamped starting_pose = posDB->getToolPositionStamped("push","/mico_link_base");
 				
         goToLocation(starting_pose);

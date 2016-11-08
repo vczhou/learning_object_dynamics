@@ -25,6 +25,13 @@ find_package(catkin REQUIRED COMPONENTS
 )
 
 
+## Generate actions in the 'action' folder
+ add_action_files(
+   DIRECTORY action
+   FILES
+   LogPerception.action
+)
+
 ###################################
 ## catkin specific configuration ##
 ###################################
