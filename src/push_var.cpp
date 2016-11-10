@@ -414,7 +414,6 @@ int main(int argc, char **argv) {
 	pressEnter("Press [Enter] to start");
 	
 	moveToStartPos(n);
-	pushForward(xVelocity, 1.0, pub_velocity);
 
     // Get height of object
     float height = getHeight();
@@ -461,7 +460,6 @@ int main(int argc, char **argv) {
 	
 	segbot_arm_manipulation::closeHand();
 	
-	pushForward(xVelocity, 1.0, pub_velocity);
 	stopMotion(pub_velocity);
 
 	while(ros::ok()) {
