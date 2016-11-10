@@ -311,7 +311,7 @@ bool goToLocation(geometry_msgs::PoseStamped ps){
     jaco_msgs::ArmPoseGoal goalPose;
     goalPose.pose.header.frame_id = ps.header.frame_id;
     goalPose.pose.pose = ps.pose;
-    goalPose.pose.pose.orientation.y *= -1;
+    //goalPose.pose.pose.orientation.y *= -1;
     ac.waitForServer();
     ROS_DEBUG("Waiting for server.");
     ROS_INFO("Sending goal.");
@@ -383,55 +383,66 @@ int main(int argc, char **argv) {
 	//listen for arm data
 	listenForArmData();
 
-	//close fingers and "home" the arm
-	pressEnter("Press [Enter] to start");
-
+	
     //Get input for velocity
-    double xVelocity = getNumInput("Enter velocity (double) for push\n");
+    double xVelocity = 0.3;//getNumInput("Enter velocity (double) for push\n");
 	
 	//moveToStartPos(n);
 	std::string j_pos_filename = ros::package::getPath("learning_object_dynamics")+"/data/jointspace_position_db.txt";
 	std::string c_pos_filename = ros::package::getPath("learning_object_dynamics")+"/data/toolspace_position_db.txt";
 	
-	sensor_msgs:JointState joint_state_starting;
+	sensor_msgs::JointState joint_state_starting;
 	listenForArmData();
 	joint_state_starting = current_state;
+	geometry_msgs::PoseStamped temp_pose = current_pose;
 
-	ArmPositionDB *posDB = new ArmPositionDB(j_pos_filename, c_pos_filename);
+	//close fingers and "home" the arm
+	pressEnter("Press [Enter] to start");
+
+	ArmPositionDB* posDB = new ArmPositionDB(j_pos_filename, c_pos_filename);
 
 	std::vector<float> joint_pos;
-	if(posDB->hasJointPosition("push")) {
+	/*if(posDB->hasJointPosition("push")) {
 		ROS_INFO("Moving push with joint");
 
-		joint_pos = posDb->getJointPosition("push");
+		joint_pos = posDB->getJointPosition("push");
+		ROS_INFO("Size = %d", (int)joint_pos.size());
 	} else {
 		ROS_ERROR("Couldn't find joint state\n");
 	}
+	
+	for(int i = 0; i < joint_pos.size(); i++) {
+			joint_state_starting.position[i]=joint_pos[i];
+	}
+	ROS_INFO("Finished filling up array\n");
+	//joint_state_starting.position = joint_pos;
+	segbot_arm_manipulation::moveToJointState(n, joint_state_starting);*/
 
-	joint_state_starting.position = joint_pos;
-	segbot_arm_manipulation::moveToJointState(n, joint_state_starting);
+	segbot_arm_manipulation::openHand();
+	pushForward(xVelocity, 1.0, pub_velocity);
 
 	if (posDB->hasCarteseanPosition("push")) {
 		ROS_INFO("Moving to push starting position...");
 		// TODO change to /jaco_api_origin or /mico_api_origin
-		geometry_msgs::PoseStamped starting_pose = posDB->getToolPositionStamped("push","/mico_link_base");
+		//geometry_msgs::PoseStamped starting_pose = posDB->getToolPositionStamped("push","/mico_api_origin");
 
-        goToLocation(starting_pose);
-        /*//Publish pose to visualize in rviz 	
-		pose_pub.publish(starting_pose);
+        goToLocation(temp_pose);
+        //Publish pose to visualize in rviz 	
+		pose_pub.publish(temp_pose);
         //now go to the pose
-		segbot_arm_manipulation::moveToPoseMoveIt(n, starting_pose);
-		segbot_arm_manipulation::moveToPoseMoveIt(n, starting_pose);
+		//segbot_arm_manipulation::moveToPoseMoveIt(n, starting_pose);
+		//segbot_arm_manipulation::moveToPoseMoveIt(n, starting_pose);
         //Check to make sure actually went there in rviz
-		pose_pub.publish(starting_pose);*/
 	} else {
 		ROS_ERROR("[push_script.cpp] Cannot move arm out to starting position!");
 	}
 	
 	ros::Rate r(40);
 	ros::spinOnce();
+	sleep(5);
 	
-	r.sleep();
+	segbot_arm_manipulation::closeHand();
+	
 	pushForward(xVelocity, 1.0, pub_velocity);
 	stopMotion(pub_velocity);
 
