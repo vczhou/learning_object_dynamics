@@ -63,26 +63,11 @@ include_directories(
 
 ## executables
 
-add_executable(ex1 src/ex1.cpp)
-target_link_libraries(ex1 ${catkin_LIBRARIES} )
-
-add_executable(ex2 src/ex2.cpp)
-target_link_libraries(ex2 ${catkin_LIBRARIES} )
-
-add_executable(ex3 src/ex3.cpp)
-target_link_libraries(ex3 ${catkin_LIBRARIES} )
-
-add_executable(ex4 src/ex4.cpp)
-target_link_libraries(ex4 ${catkin_LIBRARIES} )
-
-add_executable(ex5 src/ex5.cpp)
-target_link_libraries(ex5 ${catkin_LIBRARIES} )
-
-add_executable(ex6 src/ex6.cpp)
-target_link_libraries(ex6 ${catkin_LIBRARIES} )
-
 add_executable(push_script src/push_script.cpp)
 target_link_libraries(push_script ${catkin_LIBRARIES} )
+
+add_executable(push_var src/push_var.cpp)
+target_link_libraries(push_var ${catkin_LIBRARIES} )
 
 #add_executable(log_perception_action src/log_perception_action.cpp)
 #target_link_libraries(log_perception_action ${catkin_LIBRARIES} )
