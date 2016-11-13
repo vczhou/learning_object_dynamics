@@ -9,14 +9,18 @@ find_package(catkin REQUIRED COMPONENTS
   moveit_msgs
   roscpp
   rospy
+  std_srvs
   std_msgs
   actionlib_msgs
   actionlib
+  cv_bridge
+  message_generation
   moveit_ros_planning_interface
   moveit_utils
   moveit_msgs
   nav_msgs
   move_base_msgs
+  sensor_msgs
   segbot_arm_perception
   segbot_arm_manipulation
   pcl_ros
@@ -31,6 +35,24 @@ find_package(catkin REQUIRED COMPONENTS
    FILES
    LogPerception.action
 )
+
+## Generate services in 'srv' folder
+ add_service_files(
+	FILES
+	ProcessVision.srv
+	StorePointCloud.srv
+ )
+
+## Generate added messages and services with any dependencies listed here
+ generate_messages(
+	 DEPENDENCIES
+	 std_msgs
+	 std_srvs
+	 sensor_msgs
+	 geometry_msgs
+	 actionlib_msgs
+ )
+
 
 ###################################
 ## catkin specific configuration ##
@@ -69,8 +91,9 @@ target_link_libraries(push_script ${catkin_LIBRARIES} )
 add_executable(push_var src/push_var.cpp)
 target_link_libraries(push_var ${catkin_LIBRARIES} )
 
-#add_executable(log_perception_action src/log_perception_action.cpp)
-#target_link_libraries(log_perception_action ${catkin_LIBRARIES} )
+add_executable(log_perception_action src/log_perception_action.cpp)
+add_dependencies(log_perception_action segbot_arm_perception_gencpp)
+target_link_libraries(log_perception_action ${catkin_LIBRARIES} ${Boost_LIBRARIES} )
 
 #add_executable(look_behavior src/look_behavior.cpp)
 #target_link_libraries(look_behavior ${catkin_LIBRARIES} )
