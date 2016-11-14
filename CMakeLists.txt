@@ -45,14 +45,13 @@ find_package(catkin REQUIRED COMPONENTS
 
 ## Generate added messages and services with any dependencies listed here
  generate_messages(
-	 DEPENDENCIES
-	 std_msgs
-	 std_srvs
-	 sensor_msgs
-	 geometry_msgs
-	 actionlib_msgs
+	DEPENDENCIES
+	std_msgs
+	std_srvs
+	sensor_msgs
+	geometry_msgs
+	actionlib_msgs
  )
-
 
 ###################################
 ## catkin specific configuration ##
@@ -64,11 +63,11 @@ find_package(catkin REQUIRED COMPONENTS
 ## CATKIN_DEPENDS: catkin_packages dependent projects also need
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
-#  INCLUDE_DIRS include
+   INCLUDE_DIRS include
 #  LIBRARIES segbot_arm_tasks
 #  CATKIN_DEPENDS jaco_msgs moveit_msgs roscpp rospy std_msgs
 #  DEPENDS system_lib
-   CATKIN_DEPENDS actionlib_msgs
+   DEPENDS actionlib_msgs
 )
 
 ###########
@@ -79,7 +78,8 @@ catkin_package(
 ## Your package locations should be listed before other locations
 # include_directories(include)
 include_directories(
-  ${catkin_INCLUDE_DIRS}
+  	include
+	${catkin_INCLUDE_DIRS}
 )
 
 
