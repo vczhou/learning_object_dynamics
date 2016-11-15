@@ -63,6 +63,24 @@ ros::Publisher pose_pub;
 // Mutex: //
 boost::mutex cloud_mutex;
 
+// total number of object and trials to help with folder generation
+int totalObjects;
+int totalTrials;
+
+//the starting object and trial number
+int startingObjectNum, startingTrialNum;
+
+//global strings to store the modality data
+string visionFilePath, audioFilePath, hapticFilePath;
+
+//Filepath to store the data
+// TODO Change to actual file path to be used
+std::string generalFilePath = "/home/bwi/object_ordering/";
+
+// Declare the logger services 
+grounded_logging::StorePointCloud depth_srv;
+grounded_logging::ProcessVision image_srv;
+
 bool heardJoinstState;
 bool heardPose;
 bool heardEfforts;
@@ -75,8 +93,6 @@ PointCloudT::Ptr cloud (new PointCloudT);
 PointCloudT::Ptr cloud_aggregated (new PointCloudT);
 PointCloudT::Ptr cloud_plane (new PointCloudT);
 PointCloudT::Ptr cloud_plane_baselink (new PointCloudT);
-
-
 
 //true if Ctrl-C is pressed
 bool g_caught_sigint=false;
@@ -182,6 +198,64 @@ double getNumInput(std::string message){
 	   }
 	   std::cout << "Invalid number, please try again" << std::endl;
 	}
+}
+
+// function to start storing the vision, audio and haptic data while the behaviour is being executed
+int startSensoryDataCollection(){
+    //Declare the haptic action client
+    actionlib::SimpleActionClient<learning_object_dynamics::LogPerceptionAction> ac("arm_perceptual_log_action", true);
+    learning_object_dynamics::LogPerceptionGoal goal;
+
+    // then call the vision and the audio loggers
+    image_srv.request.start = 1;
+    image_srv.request.generalImageFilePath = visionFilePath;
+                
+    //call the other two services
+    if (image_client.call(image_srv)){
+        ROS_INFO("Vision_logger_service called...");
+    }
+    else{
+        ROS_ERROR("Failed to call vision_logger_service. Server might not have been launched yet.");
+        return 1;
+    }
+    
+    ROS_INFO("Waiting for action server to start.");
+    // wait for the action server to start
+    ac.waitForServer(); //will wait for infinite time
+    ROS_INFO("Action server started, sending goal.");
+    
+    // send a goal to the action
+    goal.filePath = hapticFilePath;
+    goal.start = true;
+    ac.sendGoal(goal);
+    
+    // Print out the result of the action
+    actionlib::SimpleClientGoalState state = ac.getState();
+    ROS_INFO("Action status: %s", state.toString().c_str());
+    
+    return(0);
+}
+
+// function to stop storing the vision, audio and haptic data while the behaviour is being executed
+void stopSensoryDataCollection(){
+    //Declare the haptic action client
+    actionlib::SimpleActionClient<segbot_arm_perception::LogPerceptionAction> ac("arm_perceptual_log_action", true);
+    segbot_arm_perception::LogPerceptionGoal goal;
+    
+    //call the service again with the stop signal
+    image_srv.request.start = 0;
+    audio_srv.request.start = 0;
+                
+    if(image_client.call(image_srv)){
+        ROS_INFO("Vision_logger_service stopped...");
+    }
+    if(audio_client.call(audio_srv)){
+        ROS_INFO("Audio_logger_service stopped...");
+    }
+                
+    //stop the action
+    goal.start = false;
+    ac.sendGoal(goal);
 }
 
 /* collects a cloud by aggregating k successive frames */
@@ -437,14 +511,16 @@ int main(int argc, char **argv) {
     
         // Push with (diff) velocities
         for(int i = 1; i <= numVelocities; i++) {
-            // TODO start recording data
+            // Start recording data
+            startSensoryDataCollection();
 
             // Push forward
             double xVelocity = (double) i / 10;
 	        pushForward(xVelocity, 1.0, pub_velocity);
     
-            // TODO stop recording data
-        
+            // Stop recording data
+            stopSensoryDataCollection();                
+ 
             // Move back to saved position
             segbot_arm_manipulation::moveToPoseMoveIt(n, height_pose);
 		    segbot_arm_manipulation::moveToPoseMoveIt(n, height_pose);
@@ -454,12 +530,6 @@ int main(int argc, char **argv) {
         }
     }
 
-	ros::Rate r(40);
-	ros::spinOnce();
-	sleep(5);
-	
-	segbot_arm_manipulation::closeHand();
-	
 	stopMotion(pub_velocity);
 
 	while(ros::ok()) {

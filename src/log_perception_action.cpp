@@ -24,7 +24,7 @@
 #include "geometry_msgs/PoseStamped.h"
 #include "sensor_msgs/JointState.h"
 #include <actionlib/server/simple_action_server.h>
-#include "segbot_arm_perception/LogPerceptionAction.h"
+#include "learning_object_dynamics/LogPerceptionAction.h"
 #include "jaco_msgs/FingerPosition.h"
 #include <boost/lexical_cast.hpp>
 
