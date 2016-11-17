@@ -55,11 +55,11 @@ protected:
 
   ros::NodeHandle nh_;
   // NodeHandle instance must be created before this line. Otherwise strange error may occur.
-  actionlib::SimpleActionServer<segbot_arm_perception::LogPerceptionAction> as_; 
+  actionlib::SimpleActionServer<learning_object_dynamics::LogPerceptionAction> as_; 
   std::string action_name_;
   // create messages that are used to published feedback/result
-  segbot_arm_perception::LogPerceptionFeedback feedback_;
-  segbot_arm_perception::LogPerceptionResult result_;
+  learning_object_dynamics::LogPerceptionFeedback feedback_;
+  learning_object_dynamics::LogPerceptionResult result_;
   std::ofstream myfile;
   bool handleMade;
   
@@ -88,7 +88,7 @@ public:
 	return true;
   }
 
-  void executeCB(const segbot_arm_perception::LogPerceptionGoalConstPtr &goal){
+  void executeCB(const learning_object_dynamics::LogPerceptionGoalConstPtr &goal){
     // helper variables
     ros::Rate r(15);
     bool success = true;
