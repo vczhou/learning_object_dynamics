@@ -95,11 +95,11 @@ add_executable(log_perception_action src/log_perception_action.cpp)
 #add_dependencies(log_perception_action learning_object_dynamics_gencpp)
 target_link_libraries(log_perception_action ${catkin_LIBRARIES} ${Boost_LIBRARIES} )
 
-#add_executable(look_behavior src/look_behavior.cpp)
-#target_link_libraries(look_behavior ${catkin_LIBRARIES} )
+add_executable(look_behavior src/look_behavior.cpp)
+target_link_libraries(look_behavior ${catkin_LIBRARIES} )
 
-#add_executable(vision_logging_server src/vision_logging_server.cpp)
-#target_link_libraries(vision_logging_server ${catkin_LIBRARIES} )
+add_executable(vision_logging_server src/vision_logging_server.cpp)
+target_link_libraries(vision_logging_server ${catkin_LIBRARIES} )
 
 
 ## example task 
