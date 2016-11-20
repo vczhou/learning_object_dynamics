@@ -477,6 +477,86 @@ void createBehaviorAndSubDirectories(string behaviorName, string trialFilePath){
 		boost::filesystem::create_directory(haptic_dir);
 }
 
+void pushForward(double xVelocity, double duration, ros::Publisher pub_velocity) {
+	geometry_msgs::TwistStamped velocityMsg;
+	velocityMsg.twist.linear.x = xVelocity;
+	velocityMsg.twist.linear.y = 0.0;
+	velocityMsg.twist.linear.z = 0.0; 
+	velocityMsg.twist.angular.x = 0.0;
+	velocityMsg.twist.angular.y = 0.0;
+	velocityMsg.twist.angular.z = 0.0;
+
+	double elapsed_time = 0.0;
+	double pub_rate = 40.0; //we publish at 40 hz
+	ros::Rate r(pub_rate);
+	
+	while (ros::ok()){
+		//collect messages
+		ros::spinOnce();
+		
+		//publish velocity message
+		pub_velocity.publish(velocityMsg);
+		
+		r.sleep();
+		
+		elapsed_time += (1.0/pub_rate);
+		
+		if (elapsed_time > duration)
+			break;
+	}
+}
+
+void moveToStartPos(ros::NodeHandle nh_) {
+	std::string j_pos_filename = ros::package::getPath("learning_object_dynamics")+"/data/jointspace_position_db.txt";
+	std::string c_pos_filename = ros::package::getPath("learning_object_dynamics")+"/data/toolspace_position_db.txt";
+	
+	ArmPositionDB *posDB = new ArmPositionDB(j_pos_filename, c_pos_filename);
+
+	if (posDB->hasCarteseanPosition("push")) {
+		ROS_INFO("Moving to push starting position...");
+		geometry_msgs::PoseStamped starting_pose = posDB->getToolPositionStamped("push","/mico_link_base");
+			
+        //Publish pose to visualize in rviz 	
+		pose_pub.publish(starting_pose);
+		//now go to the pose
+		segbot_arm_manipulation::moveToPoseMoveIt(nh_, starting_pose);
+
+        //Check to make sure actually went there in rviz
+		pose_pub.publish(starting_pose);
+	} else {
+		ROS_ERROR("[push_script.cpp] Cannot move arm out to starting position!");
+	}
+}
+
+void moveToHeight(double zVelocity, double duration, ros::Publisher pub_velocity) {
+	geometry_msgs::TwistStamped velocityMsg;
+	velocityMsg.twist.linear.x = 0.0;
+	velocityMsg.twist.linear.y = 0.0;
+	velocityMsg.twist.linear.z = zVelocity; 
+	velocityMsg.twist.angular.x = 0.0;
+	velocityMsg.twist.angular.y = 0.0;
+	velocityMsg.twist.angular.z = 0.0;
+
+	double elapsed_time = 0.0;
+	double pub_rate = 40.0; //we publish at 40 hz
+	ros::Rate r(pub_rate);
+	
+	while (ros::ok()) {
+		//collect messages
+		ros::spinOnce();
+		
+		//publish velocity message
+		pub_velocity.publish(velocityMsg);
+		
+		r.sleep();
+		
+		elapsed_time += (1.0/pub_rate);
+		
+		if (elapsed_time > duration)
+			break;
+	}
+}
+
 bool loop1(ros::NodeHandle n){
 	for (int trial_num = startingTrialNum; trial_num <= totalTrials; trial_num++){
 		for (int object_num = startingObjectNum; object_num <= totalObjects; object_num++){
