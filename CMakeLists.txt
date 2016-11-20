@@ -91,6 +91,9 @@ target_link_libraries(push_script ${catkin_LIBRARIES} )
 #add_executable(push_var src/push_var.cpp)
 #target_link_libraries(push_var ${catkin_LIBRARIES} )
 
+add_executable(push_trials src/push_trials.cpp)
+target_link_libraries(push_trials ${catkin_LIBRARIES} )
+
 add_executable(log_perception_action src/log_perception_action.cpp)
 #add_dependencies(log_perception_action learning_object_dynamics_gencpp)
 target_link_libraries(log_perception_action ${catkin_LIBRARIES} ${Boost_LIBRARIES} )
