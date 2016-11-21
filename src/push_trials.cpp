@@ -40,18 +40,40 @@
 #include "jaco_msgs/ArmJointAnglesAction.h"
 #include "jaco_msgs/ArmPoseAction.h"
 //Logger Services
-#include "learning_object_dynamics/ProcessAudio.h"
 #include "learning_object_dynamics/ProcessVision.h"
 #include "learning_object_dynamics/StorePointCloud.h"
 #include <learning_object_dynamics/LogPerceptionAction.h>
 //boost filesystems
 #include <boost/filesystem.hpp>
+//our own arm library 
+#include <segbot_arm_manipulation/arm_utils.h>
+#include <segbot_arm_manipulation/arm_positions_db.h>
+//Transformer messages
+#include <tf/transform_listener.h>
+#include <tf/tf.h>
+
+//Pcl includes
+#include <pcl_ros/impl/transforms.hpp>
+#include <pcl/conversions.h>
+#include <pcl_conversions/pcl_conversions.h>
+#include <pcl/point_cloud.h>
+#include <pcl/console/parse.h>
+#include <pcl/point_types.h>
+#include <pcl/io/openni_grabber.h>
+#include <pcl/sample_consensus/sac_model_plane.h>
+#include <pcl/common/time.h>
+#include <pcl/common/common.h>
+
 
 #define foreach BOOST_FOREACH
 #define MINHEIGHT -0.05 		//defines the height of the table relative to the mico_base
 #define ALPHA .7				//constant for temporal smoothing in effort cb
 #define SHAKEANDROTATE false 	//defines whether the shake and rotate behaviors are performed
 								//note that this was implicitly true for the first experiments done
+
+/* define what kind of point clouds we're using */
+typedef pcl::PointXYZRGB PointT;
+typedef pcl::PointCloud<PointT> PointCloudT;
 
 #define DURATION_PADDING 0.5 //half a second
 
@@ -71,16 +93,19 @@ string visionFilePath, hapticFilePath;
 //Filepath to store the data
 std::string generalFilePath = "~/dynamics-ws/src/learning_object_dynamics/data";
 
+// Mutex: //
+boost::mutex cloud_mutex;
+
 //Finger vars
 float f1;
 float f2;
 ros::Publisher c_vel_pub_;
 ros::Publisher j_vel_pub_;
+ros::Publisher pose_pub;
 
 // Declare the three logger services 
 learning_object_dynamics::StorePointCloud depth_srv;
 learning_object_dynamics::ProcessVision image_srv;
-learning_object_dynamics::ProcessAudio audio_srv;
 
 //Declare the logger serice clients
 ros::ServiceClient depth_client;
@@ -102,6 +127,23 @@ double delta_effort[6];
 double effort_smoothed[6];
 double delta_effort_smoothed[6];
 
+bool heardJoinstState;
+bool heardPose;
+bool heardEfforts;
+bool heardFingers;
+
+bool collecting_cloud = false;
+bool new_cloud_available_flag = false;
+
+//global variables for storing sensory data
+sensor_msgs::JointState current_state;
+geometry_msgs::PoseStamped current_pose;
+jaco_msgs::FingerPosition current_finger;
+
+PointCloudT::Ptr cloud (new PointCloudT);
+PointCloudT::Ptr cloud_aggregated (new PointCloudT);
+PointCloudT::Ptr cloud_plane (new PointCloudT);
+PointCloudT::Ptr cloud_plane_baselink (new PointCloudT);
 geometry_msgs::Pose tool_pos_cur;
 
 // Function to wait before the placement of the objects
@@ -154,7 +196,6 @@ void stopSensoryDataCollection(){
 	
 	//call the service again with the stop signal
 	image_srv.request.start = 0;
-	audio_srv.request.start = 0;
 				
 	if(image_client.call(image_srv)){
 		ROS_INFO("Vision_logger_service stopped...");
@@ -166,15 +207,39 @@ void stopSensoryDataCollection(){
 }
 
 
+//Joint positions cb
+void joint_state_cb (const sensor_msgs::JointStateConstPtr& msg) {
+	if (msg->position.size() == NUM_JOINTS){
+		current_state = *msg;
+		heardJoinstState = true;
+	}
+}
+
+void cloud_cb (const sensor_msgs::PointCloud2ConstPtr& input)
+{
+        cloud_mutex.lock ();
+
+        //convert to PCL format
+        pcl::fromROSMsg (*input, *cloud);
+
+        //state that a new cloud is available
+        new_cloud_available_flag = true;
+
+        cloud_mutex.unlock ();
+}
 
 //checks fingers position - used for object holding assurance
 void fingers_cb(const jaco_msgs::FingerPosition input){
 	f1 = input.finger1;
 	f2 = input.finger2;
+	current_finger = input;
+	heardFingers = true;
 }
 
 //joint effort callback 
 void joint_effort_cb(const sensor_msgs::JointStateConstPtr& input){
+	current_efforts = *input;
+	heardEfforts = true;
 	
 	//compute the change in efforts if we had already heard the last one
 	if (heard_efforts){
@@ -204,7 +269,29 @@ void joint_effort_cb(const sensor_msgs::JointStateConstPtr& input){
 }
 
 void toolpos_cb(const geometry_msgs::PoseStamped &input){
+	current_pose = input;
+	heardPose = true;
+
 	tool_pos_cur = input.pose;
+}
+
+//blocking call to listen for arm data (in this case, joint states)
+void listenForArmData(){
+	heardJoinstState = false;
+	heardPose = false;
+	heardFingers = false;
+	heardEfforts = false;
+	
+	ros::Rate r(40.0);
+	
+	while (ros::ok()){
+		ros::spinOnce();	
+		
+		if (heardJoinstState && heardPose && heardFingers && heardEfforts)
+			return;
+		
+		r.sleep();
+	}
 }
 
 bool clearMsgs(double duration){
@@ -405,34 +492,13 @@ void approach(char dimension, double distance){
 	c_vel_pub_.publish(T);
 }
 
-bool drop(double height){
-	startSensoryDataCollection();
-	
-	//sleep for 1.0 sec
-	clearMsgs(DURATION_PADDING);
-	openFull();
-	
-	//sleep for 3.0 sec
-	clearMsgs(3.0);
-	
-	stopSensoryDataCollection();
-	
-	sensor_msgs::JointState grab_sub = getStateFromBag("grab_right_sub");
-	goToLocation(grab_sub, true);
-	
-	//close fingers
-	closeComplt(7000);
-}
-
 void push(){
-	closeComplt(7000);
 	approach('x', .08);
 	clearMsgs(0.5);
 	approach('x', -.08);
 }
 
 void pushFromSide(double distance){
-	closeComplt(7000);
 	approach('y', -distance);
 	clearMsgs(0.5);
 	approach('y', distance);
@@ -516,7 +582,7 @@ void moveToStartPos(ros::NodeHandle nh_) {
 		ROS_INFO("Moving to push starting position...");
 		geometry_msgs::PoseStamped starting_pose = posDB->getToolPositionStamped("push","/mico_link_base");
 			
-        //Publish pose to visualize in rviz 	
+        	//Publish pose to visualize in rviz 	
 		pose_pub.publish(starting_pose);
 		//now go to the pose
 		segbot_arm_manipulation::moveToPoseMoveIt(nh_, starting_pose);
@@ -557,6 +623,33 @@ void moveToHeight(double zVelocity, double duration, ros::Publisher pub_velocity
 	}
 }
 
+float getHeight() {
+    tf::TransformListener tf_listener;
+
+    //wait for transform and perform it
+    tf_listener.waitForTransform(cloud->header.frame_id,"\base_link",ros::Time(0), ros::Duration(3.0));
+
+    //convert plane cloud to ROS
+    sensor_msgs::PointCloud2 plane_cloud_ros;
+    pcl::toROSMsg(*cloud_plane,plane_cloud_ros);
+    plane_cloud_ros.header.frame_id = cloud->header.frame_id;
+        
+    //transform it to base link frame of reference
+    pcl_ros::transformPointCloud ("\base_link", plane_cloud_ros, plane_cloud_ros, tf_listener);
+                
+    //convert to PCL format and take centroid
+    pcl::fromROSMsg (plane_cloud_ros, *cloud_plane_baselink);
+    //pcl::compute3DCentroid (*cloud_plane_baselink, plane_centroid);
+
+    PointT min_pt, max_pt;
+    pcl::getMinMax3D(*cloud_plane_baselink, min_pt, max_pt);
+    float z_min = min_pt.z;
+    float z_max = max_pt.z;
+
+    return z_max - z_min;
+    //ROS_INFO("[table_object_detection_node.cpp] Plane xyz: %f, %f, %f",plane_centroid(0),plane_centroid(1),plane_centroid(2));
+}
+
 bool loop1(ros::NodeHandle n){
 	for (int trial_num = startingTrialNum; trial_num <= totalTrials; trial_num++){
 		for (int object_num = startingObjectNum; object_num <= totalObjects; object_num++){
@@ -592,7 +685,7 @@ bool loop1(ros::NodeHandle n){
                 // TODO Change constants to depend on height
                 double zVelocity = 0.2;
                 double duration = 1.0;
-                moveToHeight(zVelocity, duration, pub_velocity); 
+                moveToHeight(zVelocity, duration, c_vel_pub_); 
         
                 // Save current state so that can go back to it 
         	    sensor_msgs::JointState height_joint;
@@ -605,7 +698,7 @@ bool loop1(ros::NodeHandle n){
                 for(int j = 1; j <= numVelocities; j++) {
 			        //PUSH behavior
                     // TODO figure out better naming convention
-                    string behavior = "push" + i + "_" + "j";
+                    string behavior = "push" + i + std::string("_") + itoa(j);
 			        createBehaviorAndSubDirectories("push", trialFilePath);
 
                     // Wait for human to move object back and press enter
@@ -634,7 +727,7 @@ bool loop1(ros::NodeHandle n){
         		    segbot_arm_manipulation::moveToPoseMoveIt(n, height_pose);
                 }
             
-                moveToStartPos();
+                moveToStartPos(n);
             }
 		}
 		
@@ -690,6 +783,7 @@ int main(int argc, char **argv){
 	movement_client = n.serviceClient<moveit_utils::MicoController>("mico_controller");
 	home_client = n.serviceClient<jaco_msgs::HomeArm>("/mico_arm_driver/in/home_arm");
 	angular_client = n.serviceClient<moveit_utils::AngularVelCtrl>("angular_vel_control");
+    	pose_pub = n.advertise<geometry_msgs::PoseStamped>("/learning_object_dynamics/pose_out", 10);
 	
 	//create subscriber to joint angles
 	//ros::Subscriber sub_angles = n.subscribe ("/mico_arm_driver/out/joint_state", 1, joint_state_cb);
@@ -702,6 +796,15 @@ int main(int argc, char **argv){
 
 	//subscriber for fingers
   	ros::Subscriber sub_finger = n.subscribe("/mico_arm_driver/out/finger_position", 1, fingers_cb);
+
+	//joint positions
+	ros::Subscriber sub_angles = n.subscribe ("/joint_states", 1, joint_state_cb);
+	
+	//joint efforts (aka haptics)
+	ros::Subscriber sub_torques = n.subscribe ("/mico_arm_driver/out/joint_efforts", 1, joint_effort_cb);
+
+	// depth
+	ros::Subscriber sub_cloud = n.subscribe("/xtion_camera/depth_registered/points", 1, cloud_cb);
   	
 	depth_client = n.serviceClient<learning_object_dynamics::StorePointCloud>("point_cloud_logger_service");
 	image_client = n.serviceClient<learning_object_dynamics::ProcessVision>("vision_logger_service");
