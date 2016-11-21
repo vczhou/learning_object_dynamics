@@ -505,9 +505,6 @@ void pushFromSide(double distance){
 }
 
 bool push(double velocity){
-    // TODO figure out what to change
-	//sensor_msgs::JointState push = getStateFromBag("push_right");
-	//goToLocation(push);
 	ROS_INFO("Place object for 'push' action");
 	pressEnter();
 	clearMsgs(0.5);
@@ -682,9 +679,10 @@ bool loop1(ros::NodeHandle n){
             int numVelocities = 5;
             for(int i = 0; i < numHeights; i++) {
                 // Move to higher starting pose 
-                // TODO Change constants to depend on height
                 double zVelocity = 0.2;
-                double duration = 1.0;
+                
+                // TODO Change constants to depend on height, after figuring out how much the arm moves
+		double duration = 1.0;
                 moveToHeight(zVelocity, duration, c_vel_pub_); 
         
                 // Save current state so that can go back to it 
@@ -697,34 +695,30 @@ bool loop1(ros::NodeHandle n){
                 // Push with (diff) velocities
                 for(int j = 1; j <= numVelocities; j++) {
 			        //PUSH behavior
-                    // TODO figure out better naming convention
                     string behavior = "push" + boost::lexical_cast<std::string>(i) + boost::lexical_cast<std::string>("_") + boost::lexical_cast<std::string>(j);
 			        createBehaviorAndSubDirectories("push", trialFilePath);
 
                     // Wait for human to move object back and press enter
-        	        pressEnter();
-
-                    // TODO figure out if push(velocity) is sufficient
-                    double xVelocity = (double) j / 10;
-                    push(xVelocity);
-        
-			        //store a point cloud after the action is performed
-			        storePointCloud();
-			        pressEnter();
-
+        	    pressEnter();
+		   
                     // Start recording data
-                    //startSensoryDataCollection();
+                    startSensoryDataCollection();
         
                     // Push forward
-                    //double xVelocity = (double) j / 10;
-        	        //pushForward(xVelocity, 1.0, pub_velocity);
+                    double xVelocity = (double) j / 10;
+        	    pushForward(xVelocity, 1.0, c_vel_pub_);
             
                     // Stop recording data
-                    //stopSensoryDataCollection();                
-         
+                    stopSensoryDataCollection();                
+        
+		    //store a point cloud after the action is performed
+		    storePointCloud();
+		    pressEnter();
+
+ 
                     // Move back to saved position
                     segbot_arm_manipulation::moveToPoseMoveIt(n, height_pose);
-        		    segbot_arm_manipulation::moveToPoseMoveIt(n, height_pose);
+       		    segbot_arm_manipulation::moveToPoseMoveIt(n, height_pose);
                 }
             
                 moveToStartPos(n);
