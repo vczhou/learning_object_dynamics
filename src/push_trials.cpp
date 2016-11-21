@@ -698,7 +698,7 @@ bool loop1(ros::NodeHandle n){
                 for(int j = 1; j <= numVelocities; j++) {
 			        //PUSH behavior
                     // TODO figure out better naming convention
-                    string behavior = "push" + i + std::string("_") + itoa(j);
+                    string behavior = "push" + boost::lexical_cast<std::string>(i) + boost::lexical_cast<std::string>("_") + boost::lexical_cast<std::string>(j);
 			        createBehaviorAndSubDirectories("push", trialFilePath);
 
                     // Wait for human to move object back and press enter
