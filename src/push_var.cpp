@@ -54,6 +54,7 @@ typedef pcl::PointCloud<PointT> PointCloudT;
 sensor_msgs::JointState current_state;
 geometry_msgs::PoseStamped current_pose;
 sensor_msgs::JointState current_efforts;
+sensor_msgs::JointState last_efforts;
 jaco_msgs::FingerPosition current_finger;
 
 //publishers
@@ -449,6 +450,26 @@ bool goToLocation(sensor_msgs::JointState js){
     
 }
 
+void createBehaviorAndSubDirectories(string behaviorName, string trialFilePath){
+    //create behaviour directory
+    string behaviorFilePath = trialFilePath + "/" + behaviorName;
+    boost::filesystem::path behavior_dir (behaviorFilePath);
+    if(!boost::filesystem::exists(behavior_dir))
+        boost::filesystem::create_directory(behavior_dir);
+        
+    //create a new directory for vision
+    visionFilePath = behaviorFilePath + "/" + "vision_data";
+    boost::filesystem::path vision_dir (visionFilePath);
+    if(!boost::filesystem::exists(vision_dir))
+        boost::filesystem::create_directory(vision_dir);
+                    
+    //create a new directory for haptic
+    hapticFilePath = behaviorFilePath + "/" + "haptic_data";
+    boost::filesystem::path haptic_dir (hapticFilePath);
+    if(!boost::filesystem::exists(haptic_dir))
+        boost::filesystem::create_directory(haptic_dir);
+}
+
 int main(int argc, char **argv) {
 	// Intialize ROS with this node name
 	ros::init(argc, argv, "ex1_subscribing_to_topics");
@@ -481,12 +502,18 @@ int main(int argc, char **argv) {
 	
 	//register ctrl-c
 	signal(SIGINT, sig_handler);
-	
+
+    //create the object directory if it doesn't exist
+    std::stringstream convert_object;
+    convert_object << object_num;
+    string objectFilePath = generalFilePath + "obj_"+ convert_object.str();
+    boost::filesystem::path object_dir (objectFilePath);
+    if(!boost::filesystem::exists(object_dir))
+        boost::filesystem::create_directory(object_dir);	
+
 	//listen for arm data
 	listenForArmData();
-
 	pressEnter("Press [Enter] to start");
-	
 	moveToStartPos(n);
 
     // Get height of object
@@ -511,6 +538,9 @@ int main(int argc, char **argv) {
     
         // Push with (diff) velocities
         for(int i = 1; i <= numVelocities; i++) {
+            // Wait for human to move object back and press enter
+	        pressEnter("Press [Enter] when object is in position \n");
+
             // Start recording data
             startSensoryDataCollection();
 
@@ -524,10 +554,8 @@ int main(int argc, char **argv) {
             // Move back to saved position
             segbot_arm_manipulation::moveToPoseMoveIt(n, height_pose);
 		    segbot_arm_manipulation::moveToPoseMoveIt(n, height_pose);
-
-            // Wait for human to move object back and press enter
-	        pressEnter("Press [Enter] when object is back in position \n");
         }
+	    moveToStartPos(n);
     }
 
 	stopMotion(pub_velocity);

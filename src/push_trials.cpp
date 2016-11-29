@@ -146,265 +146,272 @@ PointCloudT::Ptr cloud_plane (new PointCloudT);
 PointCloudT::Ptr cloud_plane_baselink (new PointCloudT);
 geometry_msgs::Pose tool_pos_cur;
 
+//true if Ctrl-C is pressed
+bool g_caught_sigint=false;
+
+/* what happens when ctr-c is pressed */
+void sig_handler(int sig) {
+	g_caught_sigint = true;
+	ROS_INFO("caught sigint, init shutdown sequence...");
+	ros::shutdown();
+	exit(1);
+};
+
 // Function to wait before the placement of the objects
 void pressEnter(){
-	cout << "Press the ENTER key to continue";
-	while (cin.get() != '\n')
-		cout << "Please press ENTER\n";
+    cout << "Press the ENTER key to continue";
+    while (cin.get() != '\n')
+        cout << "Please press ENTER\n";
 }
 
 // function to start storing the vision, audio and haptic data while the behaviour is being executed
 int startSensoryDataCollection(){
-	//Declare the haptic action client
-	actionlib::SimpleActionClient<learning_object_dynamics::LogPerceptionAction> ac("arm_perceptual_log_action", true);
-	learning_object_dynamics::LogPerceptionGoal goal;
-	// then call the vision and the audio loggers
-	image_srv.request.start = 1;
-	image_srv.request.generalImageFilePath = visionFilePath;
+    //Declare the haptic action client
+    actionlib::SimpleActionClient<learning_object_dynamics::LogPerceptionAction> ac("arm_perceptual_log_action", true);
+    learning_object_dynamics::LogPerceptionGoal goal;
+    // then call the vision and the audio loggers
+    image_srv.request.start = 1;
+    image_srv.request.generalImageFilePath = visionFilePath;
 				
-	//call the other two services
-	if (image_client.call(image_srv)){
-		ROS_INFO("Vision_logger_service called...");
-	}
-	else{
-		ROS_ERROR("Failed to call vision_logger_service. Server might not have been launched yet.");
-		return 1;
-	}
+    //call the other two services
+    if (image_client.call(image_srv)){
+        ROS_INFO("Vision_logger_service called...");
+    } else{
+        ROS_ERROR("Failed to call vision_logger_service. Server might not have been launched yet.");
+        return 1;
+    }
 	
-	ROS_INFO("Waiting for action server to start.");
-	// wait for the action server to start
-	ac.waitForServer(); //will wait for infinite time
-	ROS_INFO("Action server started, sending goal.");
+    ROS_INFO("Waiting for action server to start.");
+    // wait for the action server to start
+    ac.waitForServer(); //will wait for infinite time
+    ROS_INFO("Action server started, sending goal.");
 	
-	// send a goal to the action
-	goal.filePath = hapticFilePath;
-	goal.start = true;
-	ac.sendGoal(goal);
+    // send a goal to the action
+    goal.filePath = hapticFilePath;
+    goal.start = true;
+    ac.sendGoal(goal);
 	
-	// Print out the result of the action
-	actionlib::SimpleClientGoalState state = ac.getState();
-	ROS_INFO("Action status: %s",state.toString().c_str());
+    // Print out the result of the action
+    actionlib::SimpleClientGoalState state = ac.getState();
+    ROS_INFO("Action status: %s",state.toString().c_str());
 	
-	return(0);
+    return(0);
 }
 
 // function to stop storing the vision, audio and haptic data while the behaviour is being executed
 void stopSensoryDataCollection(){
-	//Declare the haptic action client
-	actionlib::SimpleActionClient<learning_object_dynamics::LogPerceptionAction> ac("arm_perceptual_log_action", true);
-	learning_object_dynamics::LogPerceptionGoal goal;
+    //Declare the haptic action client
+    actionlib::SimpleActionClient<learning_object_dynamics::LogPerceptionAction> ac("arm_perceptual_log_action", true);
+    learning_object_dynamics::LogPerceptionGoal goal;
 	
-	//call the service again with the stop signal
-	image_srv.request.start = 0;
+    //call the service again with the stop signal
+    image_srv.request.start = 0;
 				
-	if(image_client.call(image_srv)){
-		ROS_INFO("Vision_logger_service stopped...");
-	}
+    if(image_client.call(image_srv)){
+        ROS_INFO("Vision_logger_service stopped...");
+    }
 				
-	//stop the action
-	goal.start = false;
-	ac.sendGoal(goal);
+    //stop the action
+    goal.start = false;
+    ac.sendGoal(goal);
 }
 
 
 //Joint positions cb
 void joint_state_cb (const sensor_msgs::JointStateConstPtr& msg) {
-	if (msg->position.size() == NUM_JOINTS){
-		current_state = *msg;
-		heardJoinstState = true;
-	}
+    if (msg->position.size() == NUM_JOINTS){
+        current_state = *msg;
+        heardJoinstState = true;
+    }
 }
 
-void cloud_cb (const sensor_msgs::PointCloud2ConstPtr& input)
-{
-        cloud_mutex.lock ();
+void cloud_cb (const sensor_msgs::PointCloud2ConstPtr& input) {
+    cloud_mutex.lock ();
 
-        //convert to PCL format
-        pcl::fromROSMsg (*input, *cloud);
+    //convert to PCL format
+    pcl::fromROSMsg (*input, *cloud);
 
-        //state that a new cloud is available
-        new_cloud_available_flag = true;
+    //state that a new cloud is available
+    new_cloud_available_flag = true;
 
-        cloud_mutex.unlock ();
+    cloud_mutex.unlock ();
 }
 
 //checks fingers position - used for object holding assurance
 void fingers_cb(const jaco_msgs::FingerPosition input){
-	f1 = input.finger1;
-	f2 = input.finger2;
-	current_finger = input;
-	heardFingers = true;
+    f1 = input.finger1;
+    f2 = input.finger2;
+    current_finger = input;
+    heardFingers = true;
 }
 
 //joint effort callback 
 void joint_effort_cb(const sensor_msgs::JointStateConstPtr& input){
-	current_efforts = *input;
-	heardEfforts = true;
+    current_efforts = *input;
+    heardEfforts = true;
 	
-	//compute the change in efforts if we had already heard the last one
-	if (heard_efforts){
-		for (int i = 0; i < 6; i ++){
-			delta_effort[i] = input->effort[i]-current_efforts.effort[i];
-			effort_smoothed[i] = ALPHA * input->effort[i] + (1.0 - ALPHA) * current_efforts.effort[i];
-			delta_effort_smoothed[i] = effort_smoothed[i] - current_efforts.effort[i];
-		}
-	}
+    //compute the change in efforts if we had already heard the last one
+    if (heard_efforts){
+        for (int i = 0; i < 6; i ++){
+            delta_effort[i] = input->effort[i]-current_efforts.effort[i];
+            effort_smoothed[i] = ALPHA * input->effort[i] + (1.0 - ALPHA) * current_efforts.effort[i];
+            delta_effort_smoothed[i] = effort_smoothed[i] - current_efforts.effort[i];
+        }
+    }
 	
-	//store the current effort
-	current_efforts = *input;
+    //store the current effort
+    current_efforts = *input;
 	
-	total_grav_free_effort = 0.0;
-	for(int i = 0; i < 6; i ++){
-		if (current_efforts.effort[i] < 0.0)
-			total_grav_free_effort -= (current_efforts.effort[i]);
-		else 
-			total_grav_free_effort += (current_efforts.effort[i]);
-	}
+    total_grav_free_effort = 0.0;
+    for(int i = 0; i < 6; i ++){
+        if (current_efforts.effort[i] < 0.0)
+            total_grav_free_effort -= (current_efforts.effort[i]);
+        else 
+            total_grav_free_effort += (current_efforts.effort[i]);
+    }
 	
-	//calc total change in efforts
-	total_delta = delta_effort[0]+delta_effort[1]+delta_effort[2]+delta_effort[3]+delta_effort[4]+delta_effort[5];
-	total_delta_smoothed = delta_effort_smoothed[0] + delta_effort_smoothed[1] + delta_effort_smoothed[3]
-		+ delta_effort_smoothed[4] + delta_effort_smoothed[5];
-	heard_efforts = true;
+    //calc total change in efforts
+    total_delta = delta_effort[0]+delta_effort[1]+delta_effort[2]+delta_effort[3]+delta_effort[4]+delta_effort[5];
+    total_delta_smoothed = delta_effort_smoothed[0] + delta_effort_smoothed[1] + delta_effort_smoothed[3]
+    + delta_effort_smoothed[4] + delta_effort_smoothed[5];
+    heard_efforts = true;
 }
 
 void toolpos_cb(const geometry_msgs::PoseStamped &input){
-	current_pose = input;
-	heardPose = true;
+    current_pose = input;
+    heardPose = true;
 
-	tool_pos_cur = input.pose;
+    tool_pos_cur = input.pose;
 }
 
 //blocking call to listen for arm data (in this case, joint states)
 void listenForArmData(){
-	heardJoinstState = false;
-	heardPose = false;
-	heardFingers = false;
-	heardEfforts = false;
+    heardJoinstState = false;
+    heardPose = false;
+    heardFingers = false;
+    heardEfforts = false;
 	
-	ros::Rate r(40.0);
+    ros::Rate r(40.0);
 	
-	while (ros::ok()){
-		ros::spinOnce();	
+    while (ros::ok()){
+        ros::spinOnce();	
 		
-		if (heardJoinstState && heardPose && heardFingers && heardEfforts)
-			return;
+        if (heardJoinstState && heardPose && heardFingers && heardEfforts)
+            return;
 		
-		r.sleep();
-	}
+        r.sleep();
+    }
 }
 
 bool clearMsgs(double duration){
-	ros::Time start = ros::Time::now();
-	ros::Duration timeout = ros::Duration(duration);
-	ros::Rate r2(30);
-	//clears out old effort msgs
-	while( (ros::Time::now() - start) < timeout){
-		ros::spinOnce();
-		r2.sleep();
-	}
-	return true;
+    ros::Time start = ros::Time::now();
+    ros::Duration timeout = ros::Duration(duration);
+    ros::Rate r2(30);
+    //clears out old effort msgs
+    while( (ros::Time::now() - start) < timeout){
+        ros::spinOnce();
+        r2.sleep();
+    }
+    return true;
 }
 
 int storePointCloud(){
-	// call the point cloud logger
-	depth_srv.request.start = 1;
-	depth_srv.request.pointCloudFilePath = visionFilePath;
+    // call the point cloud logger
+    depth_srv.request.start = 1;
+    depth_srv.request.pointCloudFilePath = visionFilePath;
 				
-	//Check if the services are running
-	if (depth_client.call(depth_srv)){
-		ROS_INFO("Point_cloud_logger_service called...");
-	}
-	else{
-		ROS_ERROR("Failed to call point_cloud_logger_service. Server might not have been launched yet.");
-		return 1;
-	}
-	// Wait for 1 seconds to make sure that a point cloud is captured	
-	clearMsgs(1);
-	
-	//Send a stop request
-	depth_srv.request.start = 0;
+    //Check if the services are running
+    if (depth_client.call(depth_srv)){
+        ROS_INFO("Point_cloud_logger_service called...");
+    } else{
+        ROS_ERROR("Failed to call point_cloud_logger_service. Server might not have been launched yet.");
+        return 1;
+    }
 
-	//call the client with the stop signal
-	if(depth_client.call(depth_srv)){
-		ROS_INFO("Point_cloud_logger_service stopped...");
-	}
+    // Wait for 1 seconds to make sure that a point cloud is captured	
+    clearMsgs(1);
 	
-	return(0);
+    //Send a stop request
+    depth_srv.request.start = 0;
+
+    //call the client with the stop signal
+    if(depth_client.call(depth_srv)){
+        ROS_INFO("Point_cloud_logger_service stopped...");
+    }
+	
+    return(0);
 }
 
 bool goToLocation(sensor_msgs::JointState js){
-	moveit_utils::AngularVelCtrl srv;
-	srv.request.state = js;
-	/*if(angular_client.call(srv))
-		ROS_INFO("Sending angular commands");
-	else
-		ROS_INFO("Cannot contact angular velocity service. Is it running?");
-	clearMsgs(.5);
-	return srv.response.success;*/
-	actionlib::SimpleActionClient<jaco_msgs::ArmJointAnglesAction> ac("/mico_arm_driver/joint_angles/arm_joint_angles", true);
-	jaco_msgs::ArmJointAnglesGoal goal;
-	goal.angles.joint1 = js.position[0];
-	goal.angles.joint2 = js.position[1];
-	goal.angles.joint3 = js.position[2];
-	goal.angles.joint4 = js.position[3];
-	goal.angles.joint5 = js.position[4];
-	goal.angles.joint6 = js.position[5];
-	//ROS_INFO("Joint6: %f", fromFile.position[5]);
-	ac.waitForServer();
-	ac.sendGoal(goal);
-	ROS_INFO("Trajectory goal sent");
-	ac.waitForResult();
-	
+    moveit_utils::AngularVelCtrl srv;
+    srv.request.state = js;
+    /*if(angular_client.call(srv))
+        ROS_INFO("Sending angular commands");
+      else
+        ROS_INFO("Cannot contact angular velocity service. Is it running?");
+      clearMsgs(.5);
+       return srv.response.success;*/
+    actionlib::SimpleActionClient<jaco_msgs::ArmJointAnglesAction> ac("/mico_arm_driver/joint_angles/arm_joint_angles", true);
+    jaco_msgs::ArmJointAnglesGoal goal;
+    goal.angles.joint1 = js.position[0];
+    goal.angles.joint2 = js.position[1];
+    goal.angles.joint3 = js.position[2];
+    goal.angles.joint4 = js.position[3];
+    goal.angles.joint5 = js.position[4];
+    goal.angles.joint6 = js.position[5];
+    //ROS_INFO("Joint6: %f", fromFile.position[5]);
+    ac.waitForServer();
+    ac.sendGoal(goal);
+    ROS_INFO("Trajectory goal sent");
+    ac.waitForResult();	
 }
 
 bool goToLocation(geometry_msgs::PoseStamped ps){
-	actionlib::SimpleActionClient<jaco_msgs::ArmPoseAction> ac("/mico_arm_driver/arm_pose/arm_pose", true);
-	jaco_msgs::ArmPoseGoal goalPose;
-	goalPose.pose.header.frame_id = ps.header.frame_id;
-	goalPose.pose.pose = ps.pose;
-	goalPose.pose.pose.orientation.y *= -1;
-	ac.waitForServer();
-	ROS_DEBUG("Waiting for server.");
-	ROS_INFO("Sending goal.");
-	ac.sendGoal(goalPose);
-	ac.waitForResult();
-	
+    actionlib::SimpleActionClient<jaco_msgs::ArmPoseAction> ac("/mico_arm_driver/arm_pose/arm_pose", true);
+    jaco_msgs::ArmPoseGoal goalPose;
+    goalPose.pose.header.frame_id = ps.header.frame_id;
+    goalPose.pose.pose = ps.pose;
+    goalPose.pose.pose.orientation.y *= -1;
+    ac.waitForServer();
+    ROS_DEBUG("Waiting for server.");
+    ROS_INFO("Sending goal.");
+    ac.sendGoal(goalPose);
+    ac.waitForResult();
 }
 
 void approach(double distance, double z = 0){
-	ros::Rate r(4);
-	ros::spinOnce();
-	double base_vel = .1;
+    ros::Rate r(4);
+    ros::spinOnce();
+    double base_vel = .1;
 
-	geometry_msgs::TwistStamped T;
-	T.twist.linear.x= 0.0;
-	T.twist.linear.y= 0.0;
-	T.twist.linear.z= 0.0;
-	T.twist.angular.x= 0.0;
-	T.twist.angular.y= 0.0;
-	T.twist.angular.z= 0.0;
+    geometry_msgs::TwistStamped T;
+    T.twist.linear.x= 0.0;
+    T.twist.linear.y= 0.0;
+    T.twist.linear.z= 0.0;
+    T.twist.angular.x= 0.0;
+    T.twist.angular.y= 0.0;
+    T.twist.angular.z= 0.0;
 	
-	for(int i = 0; i < std::abs(distance)/base_vel/.25; i++){
-		ros::spinOnce();
-		if(distance > 0){
-			T.twist.linear.x = base_vel;
-			T.twist.linear.y = base_vel;
-		}
-		else {
-			T.twist.linear.x = -base_vel;
-			T.twist.linear.y = -base_vel;
-		}
-		T.twist.linear.z = z;
-		c_vel_pub_.publish(T);
-		r.sleep();
-	}
-	T.twist.linear.x = 0.0;
-	T.twist.linear.y = 0.0;
-	T.twist.linear.z = 0.0;
+    for(int i = 0; i < std::abs(distance)/base_vel/.25; i++){
+        ros::spinOnce();
+        if(distance > 0){
+            T.twist.linear.x = base_vel;
+            T.twist.linear.y = base_vel;
+        } else {
+            T.twist.linear.x = -base_vel;
+            T.twist.linear.y = -base_vel;
+        }
+        T.twist.linear.z = z;
+        c_vel_pub_.publish(T);
+        r.sleep();
+    }
+    T.twist.linear.x = 0.0;
+    T.twist.linear.y = 0.0;
+    T.twist.linear.z = 0.0;
 
-	c_vel_pub_.publish(T);
+    c_vel_pub_.publish(T);
 }
+
 /*
  * Overloaded approach useful for varying distance and dimension based on application
  * while allowing velocity to be chosen by the agent
@@ -413,131 +420,132 @@ void approach(double distance, double z = 0){
  * 
  */
 void approach(std::string dimension, double distance, double velocity){
-	ros::Rate r(4);
-	ros::spinOnce();
-	double base_vel = .1;
+    ros::Rate r(4);
+    ros::spinOnce();
+    double base_vel = .1;
 
-	geometry_msgs::TwistStamped T;
-	T.twist.linear.x= 0.0;
-	T.twist.linear.y= 0.0;
-	T.twist.linear.z= 0.0;
-	T.twist.angular.x= 0.0;
-	T.twist.angular.y= 0.0;
-	T.twist.angular.z= 0.0;
-	for(int i = 0; i < distance/std::abs(velocity)/.25; i++){
-		ros::spinOnce();
+    geometry_msgs::TwistStamped T;
+    T.twist.linear.x= 0.0;
+    T.twist.linear.y= 0.0;
+    T.twist.linear.z= 0.0;
+    T.twist.angular.x= 0.0;
+    T.twist.angular.y= 0.0;
+    T.twist.angular.z= 0.0;
+    for(int i = 0; i < distance/std::abs(velocity)/.25; i++){
+        ros::spinOnce();
 
-		if(!dimension.compare("x"))
-			T.twist.linear.x = velocity;
-		else if(!dimension.compare("y"))
-			T.twist.linear.y = velocity;
-		else if(!dimension.compare("z"))
-			T.twist.linear.z = velocity;
-		else if(!dimension.compare("xy") || !dimension.compare("yx")){
-			T.twist.linear.x = velocity;
-			T.twist.linear.y = velocity;
-		}
-		c_vel_pub_.publish(T);
-		r.sleep();
-	}
-	T.twist.linear.x = 0.0;
-	T.twist.linear.y = 0.0;
-	T.twist.linear.z = 0.0;
-	c_vel_pub_.publish(T);
-	clearMsgs(.3);
+        if(!dimension.compare("x"))
+            T.twist.linear.x = velocity;
+        else if(!dimension.compare("y"))
+            T.twist.linear.y = velocity;
+        else if(!dimension.compare("z"))
+            T.twist.linear.z = velocity;
+        else if(!dimension.compare("xy") || !dimension.compare("yx")){
+            T.twist.linear.x = velocity;
+            T.twist.linear.y = velocity;
+        }
+        c_vel_pub_.publish(T);
+        r.sleep();
+    }
+    T.twist.linear.x = 0.0;
+    T.twist.linear.y = 0.0;
+    T.twist.linear.z = 0.0;
+    c_vel_pub_.publish(T);
+    clearMsgs(.3);
 }
 
 void approach(char dimension, double distance){
-	ros::Rate r(4);
-	ros::spinOnce();
-	double base_vel = .1;
+    ros::Rate r(4);
+    ros::spinOnce();
+    double base_vel = .1;
 
-	geometry_msgs::TwistStamped T;
-	T.twist.linear.x= 0.0;
-	T.twist.linear.y= 0.0;
-	T.twist.linear.z= 0.0;
-	T.twist.angular.x= 0.0;
-	T.twist.angular.y= 0.0;
-	T.twist.angular.z= 0.0;
+    geometry_msgs::TwistStamped T;
+    T.twist.linear.x= 0.0;
+    T.twist.linear.y= 0.0;
+    T.twist.linear.z= 0.0;
+    T.twist.angular.x= 0.0;
+    T.twist.angular.y= 0.0;
+    T.twist.angular.z= 0.0;
 	
-	for(int i = 0; i < std::abs(distance)/base_vel/.25; i++){
-		ros::spinOnce();
-		if(distance > 0){
-			switch(dimension){
-				case('x'):
-					T.twist.linear.x = base_vel; break;
-				case('y'):
-					T.twist.linear.y = base_vel; break;
-				case('z'):
-					T.twist.linear.z = base_vel; break;
-			}
-		}
-		else{
-			switch(dimension){
-				case('x'):
-					T.twist.linear.x = -base_vel; break;
-				case('y'):
-					T.twist.linear.y = -base_vel; break;
-				case('z'):
-					T.twist.linear.z = -base_vel; break;
-			}
-		}
-		c_vel_pub_.publish(T);
-		r.sleep();
-	}
-	T.twist.linear.x = 0.0;
-	T.twist.linear.y = 0.0;
-	T.twist.linear.z = 0.0;
+    for(int i = 0; i < std::abs(distance)/base_vel/.25; i++){
+        ros::spinOnce();
+        if(distance > 0){
+            switch(dimension){
+                case('x'):
+                    T.twist.linear.x = base_vel; break;
+                case('y'):
+                    T.twist.linear.y = base_vel; break;
+                case('z'):
+                    T.twist.linear.z = base_vel; break;
+            }
+        } else{
+            switch(dimension){
+                case('x'):
+                    T.twist.linear.x = -base_vel; break;
+                case('y'):
+                    T.twist.linear.y = -base_vel; break;
+                case('z'):
+                    T.twist.linear.z = -base_vel; break;
+            }
+        }
+    
+        c_vel_pub_.publish(T);
+        r.sleep();
+    }
 
-	c_vel_pub_.publish(T);
+    T.twist.linear.x = 0.0;
+    T.twist.linear.y = 0.0;
+    T.twist.linear.z = 0.0;
+
+    c_vel_pub_.publish(T);
 }
 
 void push(){
-	approach('x', .08);
-	clearMsgs(0.5);
-	approach('x', -.08);
+    approach('x', .08);
+    clearMsgs(0.5);
+    approach('x', -.08);
 }
 
 void pushFromSide(double distance){
-	approach('y', -distance);
-	clearMsgs(0.5);
-	approach('y', distance);
+    approach('y', -distance);
+    clearMsgs(0.5);
+    approach('y', distance);
 }
 
 bool push(double velocity){
-	ROS_INFO("Place object for 'push' action");
-	pressEnter();
-	clearMsgs(0.5);
+    ROS_INFO("Place object for 'push' action");
+    pressEnter();
+    clearMsgs(0.5);
 	
-	storePointCloud();
-	ROS_INFO("Starting sensory collection");
-	startSensoryDataCollection();
-	clearMsgs(DURATION_PADDING);
+    storePointCloud();
+    ROS_INFO("Starting sensory collection");
+    startSensoryDataCollection();
+    clearMsgs(DURATION_PADDING);
 
-	approach("y", 0.7, -velocity);
-	clearMsgs(1.0);
-	stopSensoryDataCollection();
-	clearMsgs(0.25);
+    approach("y", 0.7, -velocity);
+    clearMsgs(1.0);
+    stopSensoryDataCollection();
+    clearMsgs(0.25);
 }
 
 void createBehaviorAndSubDirectories(string behaviorName, string trialFilePath){
-	//create behaviour directory
-	string behaviorFilePath = trialFilePath + "/" + behaviorName;
-	boost::filesystem::path behavior_dir (behaviorFilePath);
-	if(!boost::filesystem::exists(behavior_dir))
-		boost::filesystem::create_directory(behavior_dir);
+    //create behaviour directory
+    string behaviorFilePath = trialFilePath + "/" + behaviorName;
+    boost::filesystem::path behavior_dir (behaviorFilePath);
+    if(!boost::filesystem::exists(behavior_dir))
+        boost::filesystem::create_directory(behavior_dir);
 		
-	//create a new directory for vision
-	visionFilePath = behaviorFilePath + "/" + "vision_data";
-	boost::filesystem::path vision_dir (visionFilePath);
-	if(!boost::filesystem::exists(vision_dir))
-		boost::filesystem::create_directory(vision_dir);
+    //create a new directory for vision
+    visionFilePath = behaviorFilePath + "/" + "vision_data";
+    boost::filesystem::path vision_dir (visionFilePath);
+    if(!boost::filesystem::exists(vision_dir))
+        boost::filesystem::create_directory(vision_dir);
 					
-	//create a new directory for haptic
-	hapticFilePath = behaviorFilePath + "/" + "haptic_data";
-	boost::filesystem::path haptic_dir (hapticFilePath);
-	if(!boost::filesystem::exists(haptic_dir))
-		boost::filesystem::create_directory(haptic_dir);
+    //create a new directory for haptic
+    hapticFilePath = behaviorFilePath + "/" + "haptic_data";
+    boost::filesystem::path haptic_dir (hapticFilePath);
+    if(!boost::filesystem::exists(haptic_dir))
+        boost::filesystem::create_directory(haptic_dir);
 }
 
 void pushForward(double xVelocity, double duration, ros::Publisher pub_velocity) {
@@ -648,28 +656,27 @@ float getHeight() {
 }
 
 bool loop1(ros::NodeHandle n){
-	for (int trial_num = startingTrialNum; trial_num <= totalTrials; trial_num++){
-		for (int object_num = startingObjectNum; object_num <= totalObjects; object_num++){
-			ROS_INFO("Starting trial %i with object %i",trial_num, object_num);
-			ROS_INFO("Position object.");
-			pressEnter();
+    for (int trial_num = startingTrialNum; trial_num <= totalTrials; trial_num++){
+        for (int object_num = startingObjectNum; object_num <= totalObjects; object_num++){
+            ROS_INFO("Starting trial %i with object %i",trial_num, object_num);
+            ROS_INFO("Position object.");
+            pressEnter();
 			
-			//create the object directory if it doesn't exist
-			std::stringstream convert_object;
-			convert_object << object_num;
-			string objectFilePath = generalFilePath + "obj_"+ convert_object.str();
-			boost::filesystem::path object_dir (objectFilePath);
-			if(!boost::filesystem::exists(object_dir))
-				boost::filesystem::create_directory(object_dir);
+            //create the object directory if it doesn't exist
+            std::stringstream convert_object;
+            convert_object << object_num;
+            string objectFilePath = generalFilePath + "obj_"+ convert_object.str();
+            boost::filesystem::path object_dir (objectFilePath);
+            if(!boost::filesystem::exists(object_dir))
+                boost::filesystem::create_directory(object_dir);
 				
-			//create the trial directory if it doesn't exist
-			std::stringstream convert_trial;
-			convert_trial << trial_num;
-			string trialFilePath = objectFilePath + "/" + "trial_" + convert_trial.str();
-			boost::filesystem::path trial_dir (trialFilePath);
-			if(!boost::filesystem::exists(trial_dir))
-				boost::filesystem::create_directory(trial_dir);
-
+            //create the trial directory if it doesn't exist
+            std::stringstream convert_trial;
+            convert_trial << trial_num;
+            string trialFilePath = objectFilePath + "/" + "trial_" + convert_trial.str();
+            boost::filesystem::path trial_dir (trialFilePath);
+            if(!boost::filesystem::exists(trial_dir))
+                boost::filesystem::create_directory(trial_dir);
             
             // Get height of object
             float height = getHeight();
@@ -682,7 +689,7 @@ bool loop1(ros::NodeHandle n){
                 double zVelocity = 0.2;
                 
                 // TODO Change constants to depend on height, after figuring out how much the arm moves
-		double duration = 1.0;
+                double duration = 1.0;
                 moveToHeight(zVelocity, duration, c_vel_pub_); 
         
                 // Save current state so that can go back to it 
@@ -698,27 +705,26 @@ bool loop1(ros::NodeHandle n){
                     string behavior = "push" + boost::lexical_cast<std::string>(i) + boost::lexical_cast<std::string>("_") + boost::lexical_cast<std::string>(j);
 			        createBehaviorAndSubDirectories("push", trialFilePath);
 
-                    // Wait for human to move object back and press enter
-        	    pressEnter();
+                   // Wait for human to move object back and press enter
+        	        pressEnter();
 		   
                     // Start recording data
                     startSensoryDataCollection();
         
                     // Push forward
                     double xVelocity = (double) j / 10;
-        	    pushForward(xVelocity, 1.0, c_vel_pub_);
+        	        pushForward(xVelocity, 1.0, c_vel_pub_);
             
                     // Stop recording data
                     stopSensoryDataCollection();                
         
-		    //store a point cloud after the action is performed
-		    storePointCloud();
-		    pressEnter();
+		            //store a point cloud after the action is performed
+		            storePointCloud();
+		            pressEnter();
 
- 
                     // Move back to saved position
                     segbot_arm_manipulation::moveToPoseMoveIt(n, height_pose);
-       		    segbot_arm_manipulation::moveToPoseMoveIt(n, height_pose);
+       		        segbot_arm_manipulation::moveToPoseMoveIt(n, height_pose);
                 }
             
                 moveToStartPos(n);
@@ -754,6 +760,9 @@ int main(int argc, char **argv){
     startingObjectNum = getNumInput("Starting object num (int)\n");
     startingTrialNum = getNumInput("Starting trial num (int >= 1)\n");
 	
+	//register ctrl-c
+	signal(SIGINT, sig_handler);
+
 	/*//Check if the number of arguments is 1 or 3
 	//If 1 then start from the beginning for the object and trial numbers
 	//If 3 then start from the given numbers provided by the user
