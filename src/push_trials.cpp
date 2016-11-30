@@ -79,7 +79,6 @@ typedef pcl::PointCloud<PointT> PointCloudT;
 
 using namespace std;
 using namespace boost::assign;
-bool g_caught_sigint = false;
 
 // total number of object and trials to help with folder generation
 int totalObjects = 32, totalTrials = 6;
