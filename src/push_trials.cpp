@@ -142,7 +142,6 @@ jaco_msgs::FingerPosition current_finger;
 PointCloudT::Ptr cloud (new PointCloudT);
 PointCloudT::Ptr cloud_aggregated (new PointCloudT);
 PointCloudT::Ptr cloud_plane (new PointCloudT);
-PointCloudT::Ptr cloud_plane_baselink (new PointCloudT);
 geometry_msgs::Pose tool_pos_cur;
 
 //true if Ctrl-C is pressed
@@ -627,30 +626,26 @@ void moveToHeight(double zVelocity, double duration, ros::Publisher pub_velocity
 	}
 }
 
-float getHeight() {
+float getHeight(ros::NodeHandle n) {
     tf::TransformListener tf_listener;
 
     // Get the table scene
     segbot_arm_perception::TabletopPerception::Response table_scene = segbot_arm_manipulation::getTabletopScene(n);
 
-    // Table point cloud
-    *cloud_plane = table_scene.cloud_plane;
-        
     // Wait for transform and perform it
-    tf_listener.waitForTransform(cloud->header.frame_id,"\base_link",ros::Time(0), ros::Duration(3.0));
+    tf_listener.waitForTransform(table_scene.cloud_plane.header.frame_id,"\base_link",ros::Time(0), ros::Duration(3.0));
 
     // Convert plane cloud to ROS
-    sensor_msgs::PointCloud2 plane_cloud_ros;
-    pcl::toROSMsg(*cloud_plane,plane_cloud_ros);
-    plane_cloud_ros.header.frame_id = cloud->header.frame_id;
+    sensor_msgs::PointCloud2 plane_cloud_ros = table_scene.cloud_plane;
         
     // Transform it to base link frame of reference
     pcl_ros::transformPointCloud ("\base_link", plane_cloud_ros, plane_cloud_ros, tf_listener);
                 
     // Convert to PCL format and get height of table
+    PointCloudT::Ptr cloud_plane_baselink (new PointCloudT);
     pcl::fromROSMsg (plane_cloud_ros, *cloud_plane_baselink);
     PointT min_pt_table, max_pt_table;
-    pcl::getMinMax3D(*cloud_plane_baselink, min_pt, max_pt);
+    pcl::getMinMax3D(*cloud_plane_baselink, min_pt_table, max_pt_table);
     float z_min = max_pt_table.z;
 
     // Make sure there is an object on the table
@@ -670,24 +665,20 @@ float getHeight() {
         }
     }
 
-    *cloud_obj = table_scene.cloud_clusters[largest_pc_index];
+    sensor_msgs::PointCloud2 obj_cloud_ros = table_scene.cloud_clusters[largest_pc_index];
 
     // Wait for transform and perform it
-    tf_listener.waitForTransform(cloud->header.frame_id,"\base_link",ros::Time(0), ros::Duration(3.0));
+    tf_listener.waitForTransform(obj_cloud_ros.header.frame_id,"\base_link",ros::Time(0), ros::Duration(3.0));
 
-    // Convert plane cloud to ROS
-    sensor_msgs::PointCloud2 obj_cloud_ros;
-    pcl::toROSMsg(*cloud_obj, obj_cloud_ros);
-    obj_cloud_ros.header.frame_id = cloud->header.frame_id;
-        
     // Transform it to base link frame of reference
     pcl_ros::transformPointCloud ("\base_link", obj_cloud_ros, obj_cloud_ros, tf_listener);
                 
     //convert to PCL format and get max height of object
-    pcl::fromROSMsg (obj_cloud_ros, *cloud_plane_baselink);
+    PointCloudT::Ptr cloud_obj_baselink (new PointCloudT);
+    pcl::fromROSMsg (obj_cloud_ros, *cloud_obj_baselink);
     PointT min_pt_obj, max_pt_obj;
-    pcl::getMinMax3D(*cloud_plane_baselink, min_pt_obj, max_pt_obj);
-    float z_max = max_pt.z;
+    pcl::getMinMax3D(*cloud_obj_baselink, min_pt_obj, max_pt_obj);
+    float z_max = max_pt_obj.z;
     
     return z_max - z_min;
 }
@@ -716,7 +707,7 @@ bool loop1(ros::NodeHandle n){
                 boost::filesystem::create_directory(trial_dir);
             
             // Get height of object
-            float height = getHeight();
+            float height = getHeight(n);
 
             // Loop through different heights
             int numHeights = 5;
