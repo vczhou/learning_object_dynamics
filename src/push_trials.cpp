@@ -91,7 +91,7 @@ int startingObjectNum, startingTrialNum;
 string visionFilePath, hapticFilePath;
 
 //Filepath to store the data
-std::string generalFilePath = "~/dynamics-ws/src/learning_object_dynamics/data";
+std::string generalFilePath = "/home/users/fri/learning_object_data/";
 
 // Mutex: //
 boost::mutex cloud_mutex;
@@ -631,28 +631,66 @@ void moveToHeight(double zVelocity, double duration, ros::Publisher pub_velocity
 float getHeight() {
     tf::TransformListener tf_listener;
 
-    //wait for transform and perform it
+    // Get the table scene
+    segbot_arm_perception::TabletopPerception::Response table_scene = segbot_arm_manipulation::getTabletopScene(n);
+
+    // Table point cloud
+    *cloud_plane = table_scene.cloud_plane;
+        
+    // Wait for transform and perform it
     tf_listener.waitForTransform(cloud->header.frame_id,"\base_link",ros::Time(0), ros::Duration(3.0));
 
-    //convert plane cloud to ROS
+    // Convert plane cloud to ROS
     sensor_msgs::PointCloud2 plane_cloud_ros;
     pcl::toROSMsg(*cloud_plane,plane_cloud_ros);
     plane_cloud_ros.header.frame_id = cloud->header.frame_id;
         
-    //transform it to base link frame of reference
+    // Transform it to base link frame of reference
     pcl_ros::transformPointCloud ("\base_link", plane_cloud_ros, plane_cloud_ros, tf_listener);
                 
-    //convert to PCL format and take centroid
+    // Convert to PCL format and get height of table
     pcl::fromROSMsg (plane_cloud_ros, *cloud_plane_baselink);
-    //pcl::compute3DCentroid (*cloud_plane_baselink, plane_centroid);
-
-    PointT min_pt, max_pt;
+    PointT min_pt_table, max_pt_table;
     pcl::getMinMax3D(*cloud_plane_baselink, min_pt, max_pt);
-    float z_min = min_pt.z;
-    float z_max = max_pt.z;
+    float z_min = max_pt_table.z;
 
+    // Make sure there is an object on the table
+    if ((int)table_scene.cloud_clusters.size() == 0){
+        ROS_WARN("No objects found on table. The end...");
+        exit(1);      
+    }
+        
+    // Select the object with most points as the target object (aka largest)
+    int largest_pc_index = -1;
+    int largest_num_points = -1;
+    for (unsigned int i = 0; i < table_scene.cloud_clusters.size(); i++) {
+        int num_points_i = table_scene.cloud_clusters[i].height* table_scene.cloud_clusters[i].width;
+        if (num_points_i > largest_num_points){
+            largest_num_points = num_points_i;
+            largest_pc_index = i;
+        }
+    }
+
+    *cloud_obj = table_scene.cloud_clusters[largest_pc_index];
+
+    // Wait for transform and perform it
+    tf_listener.waitForTransform(cloud->header.frame_id,"\base_link",ros::Time(0), ros::Duration(3.0));
+
+    // Convert plane cloud to ROS
+    sensor_msgs::PointCloud2 obj_cloud_ros;
+    pcl::toROSMsg(*cloud_obj, obj_cloud_ros);
+    obj_cloud_ros.header.frame_id = cloud->header.frame_id;
+        
+    // Transform it to base link frame of reference
+    pcl_ros::transformPointCloud ("\base_link", obj_cloud_ros, obj_cloud_ros, tf_listener);
+                
+    //convert to PCL format and get max height of object
+    pcl::fromROSMsg (obj_cloud_ros, *cloud_plane_baselink);
+    PointT min_pt_obj, max_pt_obj;
+    pcl::getMinMax3D(*cloud_plane_baselink, min_pt_obj, max_pt_obj);
+    float z_max = max_pt.z;
+    
     return z_max - z_min;
-    //ROS_INFO("[table_object_detection_node.cpp] Plane xyz: %f, %f, %f",plane_centroid(0),plane_centroid(1),plane_centroid(2));
 }
 
 bool loop1(ros::NodeHandle n){
