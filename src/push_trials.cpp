@@ -81,7 +81,7 @@ using namespace std;
 using namespace boost::assign;
 
 // total number of object and trials to help with folder generation
-int totalObjects = 32, totalTrials = 6;
+int totalObjects = 2, totalTrials = 5;
 
 //the starting object and trial number
 int startingObjectNum, startingTrialNum;
@@ -585,9 +585,10 @@ void moveToStartPos(ros::NodeHandle nh_) {
 		ROS_INFO("Moving to push starting position...");
 		geometry_msgs::PoseStamped starting_pose = posDB->getToolPositionStamped("push","/mico_link_base");
 			
-        	//Publish pose to visualize in rviz 	
-		pose_pub.publish(starting_pose);
+        //Publish pose to visualize in rviz 	
+        pose_pub.publish(starting_pose);
 		//now go to the pose
+		segbot_arm_manipulation::moveToPoseMoveIt(nh_, starting_pose);
 		segbot_arm_manipulation::moveToPoseMoveIt(nh_, starting_pose);
 
         //Check to make sure actually went there in rviz
@@ -707,12 +708,15 @@ bool loop1(ros::NodeHandle n){
                 boost::filesystem::create_directory(trial_dir);
             
             // Get height of object
-            float height = getHeight(n);
+            //float height = getHeight(n);
+            float height = .5;
 
             // Loop through different heights
             int numHeights = 5;
             int numVelocities = 5;
             for(int i = 0; i < numHeights; i++) {
+                moveToStartPos(n);
+
                 // Move to higher starting pose 
                 double zVelocity = 0.2;
                 
@@ -732,6 +736,7 @@ bool loop1(ros::NodeHandle n){
 			        //PUSH behavior
                     string behavior = "push" + boost::lexical_cast<std::string>(i) + boost::lexical_cast<std::string>("_") + boost::lexical_cast<std::string>(j);
 			        createBehaviorAndSubDirectories("push", trialFilePath);
+                    ROS_INFO("Testing with %i height with velocity %i",i, j);
 
                    // Wait for human to move object back and press enter
         	        pressEnter();
@@ -755,7 +760,6 @@ bool loop1(ros::NodeHandle n){
        		        segbot_arm_manipulation::moveToPoseMoveIt(n, height_pose);
                 }
             
-                moveToStartPos(n);
             }
 		}
 		
@@ -841,6 +845,8 @@ int main(int argc, char **argv){
 	image_client = n.serviceClient<learning_object_dynamics::ProcessVision>("vision_logger_service");
 
 	loop1(n);
+
+    while(ros::ok()){}
 	//approachFromHome();
 	//grabFromApch(7000);
 	//carry out the sequence of behaviours
