@@ -598,6 +598,27 @@ void moveToStartPos(ros::NodeHandle nh_) {
 	}
 }
 
+void moveToOutOfView(ros::NodeHandle nh_) {
+	std::string j_pos_filename = ros::package::getPath("learning_object_dynamics")+"/data/jointspace_position_db.txt";
+	std::string c_pos_filename = ros::package::getPath("learning_object_dynamics")+"/data/toolspace_position_db.txt";
+	
+    ArmPositionDB positionDB(j_pos_filename, c_pos_filename);
+
+	if (posDB->hasCarteseanPosition("side_view")) {
+		ROS_INFO("Moving arm out of way...");
+		geometry_msgs::PoseStamped out_of_view_pose = posDB->getToolPositionStamped("side_view","/mico_link_base");
+			
+        //Publish pose to visualize in rviz 	
+        pose_pub.publish(starting_pose);
+		//now go to the pose
+		segbot_arm_manipulation::moveToPoseMoveIt(nh_, out_of_view_pose);
+		segbot_arm_manipulation::moveToPoseMoveIt(nh_, out_of_view_pose);
+
+	} else {
+		ROS_ERROR("[push_script.cpp] Cannot move arm out to out of view position!");
+	}
+}
+
 void moveToHeight(double zVelocity, double duration, ros::Publisher pub_velocity) {
 	geometry_msgs::TwistStamped velocityMsg;
 	velocityMsg.twist.linear.x = 0.0;
@@ -633,7 +654,14 @@ float getHeight(ros::NodeHandle n) {
     // Get the table scene
     segbot_arm_perception::TabletopPerception::Response table_scene = segbot_arm_manipulation::getTabletopScene(n);
 
+    // Make sure there is an object on the table
+    if ((int)table_scene.cloud_clusters.size() == 0){
+        ROS_WARN("No objects found on table. The end...");
+        exit(1);      
+    }
+
     // Wait for transform and perform it
+    ROS_INFO("Cloud plane frame id: %s", table_scene.cloud_plane.header.frame_id);
     tf_listener.waitForTransform(table_scene.cloud_plane.header.frame_id,"\base_link",ros::Time(0), ros::Duration(3.0));
 
     // Convert plane cloud to ROS
@@ -641,6 +669,7 @@ float getHeight(ros::NodeHandle n) {
         
     // Transform it to base link frame of reference
     pcl_ros::transformPointCloud ("\base_link", plane_cloud_ros, plane_cloud_ros, tf_listener);
+    ROS_INFO("Have transformed plane to base_link frame of reference");
                 
     // Convert to PCL format and get height of table
     PointCloudT::Ptr cloud_plane_baselink (new PointCloudT);
@@ -648,12 +677,6 @@ float getHeight(ros::NodeHandle n) {
     PointT min_pt_table, max_pt_table;
     pcl::getMinMax3D(*cloud_plane_baselink, min_pt_table, max_pt_table);
     float z_min = max_pt_table.z;
-
-    // Make sure there is an object on the table
-    if ((int)table_scene.cloud_clusters.size() == 0){
-        ROS_WARN("No objects found on table. The end...");
-        exit(1);      
-    }
         
     // Select the object with most points as the target object (aka largest)
     int largest_pc_index = -1;
@@ -669,19 +692,23 @@ float getHeight(ros::NodeHandle n) {
     sensor_msgs::PointCloud2 obj_cloud_ros = table_scene.cloud_clusters[largest_pc_index];
 
     // Wait for transform and perform it
+    ROS_INFO("Object frame id %s", obj_cloud_ros.header.frame_id);
     tf_listener.waitForTransform(obj_cloud_ros.header.frame_id,"\base_link",ros::Time(0), ros::Duration(3.0));
 
     // Transform it to base link frame of reference
     pcl_ros::transformPointCloud ("\base_link", obj_cloud_ros, obj_cloud_ros, tf_listener);
+    ROS_INFO("Have transformed object to base_link frame of reference");
                 
-    //convert to PCL format and get max height of object
+    // Convert to PCL format and get max height of object
     PointCloudT::Ptr cloud_obj_baselink (new PointCloudT);
     pcl::fromROSMsg (obj_cloud_ros, *cloud_obj_baselink);
     PointT min_pt_obj, max_pt_obj;
     pcl::getMinMax3D(*cloud_obj_baselink, min_pt_obj, max_pt_obj);
     float z_max = max_pt_obj.z;
+    float z_diff = z_max - z_min;
+    ROS_INFO("Table height: %f, Object height: %f, Height diff: %f", z_min, z_max, z_diff);
     
-    return z_max - z_min;
+    return z_diff;
 }
 
 bool loop1(ros::NodeHandle n){
@@ -707,6 +734,13 @@ bool loop1(ros::NodeHandle n){
             if(!boost::filesystem::exists(trial_dir))
                 boost::filesystem::create_directory(trial_dir);
             
+            // Move arm out of way to get height
+            moveToOutOfView(n);
+
+		    // Store a point cloud after the action is performed
+		    storePointCloud();
+		    pressEnter();
+
             // Get height of object
             //float height = getHeight(n);
             float height = .5;
