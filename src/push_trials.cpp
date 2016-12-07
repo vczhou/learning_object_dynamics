@@ -602,14 +602,14 @@ void moveToOutOfView(ros::NodeHandle nh_) {
 	std::string j_pos_filename = ros::package::getPath("learning_object_dynamics")+"/data/jointspace_position_db.txt";
 	std::string c_pos_filename = ros::package::getPath("learning_object_dynamics")+"/data/toolspace_position_db.txt";
 	
-    ArmPositionDB positionDB(j_pos_filename, c_pos_filename);
+	ArmPositionDB *posDB = new ArmPositionDB(j_pos_filename, c_pos_filename);
 
 	if (posDB->hasCarteseanPosition("side_view")) {
 		ROS_INFO("Moving arm out of way...");
 		geometry_msgs::PoseStamped out_of_view_pose = posDB->getToolPositionStamped("side_view","/mico_link_base");
 			
         //Publish pose to visualize in rviz 	
-        pose_pub.publish(starting_pose);
+        pose_pub.publish(out_of_view_pose);
 		//now go to the pose
 		segbot_arm_manipulation::moveToPoseMoveIt(nh_, out_of_view_pose);
 		segbot_arm_manipulation::moveToPoseMoveIt(nh_, out_of_view_pose);
@@ -661,7 +661,8 @@ float getHeight(ros::NodeHandle n) {
     }
 
     // Wait for transform and perform it
-    ROS_INFO("Cloud plane frame id: %s", table_scene.cloud_plane.header.frame_id);
+    ROS_INFO("Cloud plane frame id:");
+    ROS_INFO_STREAM(table_scene.cloud_plane.header.frame_id);
     tf_listener.waitForTransform(table_scene.cloud_plane.header.frame_id,"\base_link",ros::Time(0), ros::Duration(3.0));
 
     // Convert plane cloud to ROS
@@ -692,7 +693,8 @@ float getHeight(ros::NodeHandle n) {
     sensor_msgs::PointCloud2 obj_cloud_ros = table_scene.cloud_clusters[largest_pc_index];
 
     // Wait for transform and perform it
-    ROS_INFO("Object frame id %s", obj_cloud_ros.header.frame_id);
+    ROS_INFO("Object frame id ");
+    ROS_INFO_STREAM(obj_cloud_ros.header.frame_id);
     tf_listener.waitForTransform(obj_cloud_ros.header.frame_id,"\base_link",ros::Time(0), ros::Duration(3.0));
 
     // Transform it to base link frame of reference
